@@ -424,8 +424,8 @@ KOOK/
 
 **1️⃣ 클론**
 ```bash
-git clone https://github.com/wouldu0/KOOK.git
-cd KOOK
+git clone https://github.com/wouldu0/final_KOOK.git
+cd final_KOOK
 ```
 
 **2️⃣ 백엔드 — 가상환경 및 패키지**
