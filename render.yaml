@@ -1,0 +1,21 @@
+# Render 배포 설계도(Blueprint).
+# Render 대시보드에서 New → Blueprint 를 고르고 이 저장소를 선택하면
+# 아래 설정대로 백엔드가 자동으로 만들어진다.
+#
+# 메모리: 모델 로딩 후 실측 410MB → 무료 플랜(512MB)에 들어간다.
+services:
+  - type: web
+    name: kook-backend
+    runtime: docker
+    plan: free
+    region: singapore # 한국에서 가장 가까운 무료 리전
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    envVars:
+      # sync: false = 값은 Render 대시보드에서 직접 입력한다(저장소에 안 올라간다).
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      # 배포된 프론트(*.vercel.app)는 server_FOOK.py의 정규식으로 이미 허용된다.

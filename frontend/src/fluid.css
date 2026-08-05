@@ -1,0 +1,466 @@
+/* ============================================================================
+   v16 — 기종별 유동 크기 (Fluid sizing)
+   문제: 지금까지 크기가 전부 px 고정이라 320px 폰과 430px 폰의 글자·버튼이 똑같았다.
+        작은 폰은 빽빽하고 큰 폰은 허전했다.
+   해법: .phone을 컨테이너로 삼아 cqi(컨테이너 폭의 1%) 기반 clamp로 크기를 준다.
+        · 기준 390px(아이폰 14/15)에서 기존 디자인 값과 같아지도록 계수를 잡았다.
+        · 320px에서 약 0.85배, 430px에서 약 1.1배로 매끄럽게 변한다.
+        · 뷰포트(vw)가 아니라 프레임 폭 기준이라 데스크톱 미리보기도 안 깨진다.
+   이 파일은 styles.css / mockup.css 다음에 로드된다 (main.tsx의 import 순서).
+   ========================================================================== */
+.phone {
+  container-type: inline-size;
+  /* 글자 크기 단계 */
+  /* 주 사용자가 고령 투석 환자라, 작은 폰에서도 읽히도록 하한을 넉넉히 잡았다. */
+  --fs-xs: clamp(11.5px, 2.9cqi, 13.5px);
+  --fs-sm: clamp(13px, 3.3cqi, 15px);
+  --fs-md: clamp(15px, 3.8cqi, 17.5px);
+  --fs-lg: clamp(16.5px, 4.4cqi, 19.5px);
+  --fs-xl: clamp(18px, 5.1cqi, 22px);
+  --fs-2xl: clamp(19px, 6.7cqi, 29px);
+  --fs-3xl: clamp(26px, 10.3cqi, 45px);
+  /* 여백 · 모서리 · 터치 목표 */
+  --sp-xs: clamp(4px, 1.3cqi, 7px);
+  --sp-sm: clamp(6px, 2.1cqi, 11px);
+  --sp-md: clamp(10px, 3.1cqi, 16px);
+  --sp-lg: clamp(14px, 4.4cqi, 22px);
+  --rd-sm: clamp(9px, 2.8cqi, 14px);
+  --rd-md: clamp(12px, 3.8cqi, 19px);
+  --touch: clamp(46px, 13.3cqi, 58px);
+}
+
+/* ── 프레임 자체를 유동으로 ── */
+.page { padding: clamp(0px, 2vw, 18px); }
+.phone {
+  width: 100%;
+  max-width: 430px;
+  height: min(100dvh, 920px);
+  border-radius: clamp(0px, 5vw, 32px);
+}
+@media (max-width: 470px) {
+  .page { padding: 0; display: block; background: var(--paper); }
+  .phone { max-width: none; height: 100dvh; border-radius: 0; box-shadow: none; }
+}
+@media (min-width: 471px) {
+  .page { background: #f0eee7; }
+}
+
+/* ── 본문 여백 · 헤더 · 푸터 ── */
+.screen { padding: var(--sp-md) var(--sp-lg) var(--sp-lg); }
+.header { height: clamp(54px, 16cqi, 72px); padding: 0 var(--sp-lg); }
+.footer { padding: var(--sp-sm) var(--sp-lg) calc(var(--sp-sm) + env(safe-area-inset-bottom)); }
+.logo-button, .logo-button img { height: clamp(40px, 13cqi, 58px); }
+.icon-ghost, .icon-avatar { width: clamp(34px, 10.3cqi, 46px); height: clamp(34px, 10.3cqi, 46px); }
+.icon-back { font-size: clamp(24px, 7.7cqi, 34px); }
+
+/* ── 타이포 ── */
+.phone .screen h1 { font-size: var(--fs-2xl) !important; line-height: 1.3; }
+.phone .splash-title { font-size: var(--fs-3xl) !important; }
+.phone .login-title { font-size: var(--fs-2xl) !important; }
+.phone .onboarding-title { font-size: var(--fs-xl) !important; }
+.phone .onboarding-title b { font-size: var(--fs-2xl); }
+.phone .analysis-title, .phone .greeting { font-size: var(--fs-2xl) !important; }
+.phone .hero-center h1 { font-size: var(--fs-xl) !important; }
+.sub { font-size: var(--fs-sm); }
+.splash-sub, .login-tagline { font-size: var(--fs-lg); }
+.section-title { font-size: var(--fs-lg); margin: var(--sp-md) 0 var(--sp-sm); }
+.eyebrow { font-size: var(--fs-xs); }
+
+/* ── 버튼 · 입력 ── */
+.btn { min-height: var(--touch); font-size: var(--fs-md); border-radius: var(--rd-sm); }
+.btn-pill { min-height: calc(var(--touch) * 1.12); font-size: var(--fs-lg); }
+.flow-btn { min-height: calc(var(--touch) * 0.92); font-size: var(--fs-sm); padding: 0 var(--sp-md); }
+.field, .icon-field { border-radius: var(--rd-sm); padding: 0 var(--sp-md); }
+.field input, .icon-field input { height: var(--touch); font-size: var(--fs-md); }
+.search { height: var(--touch); border-radius: var(--rd-sm); padding: 0 var(--sp-md); }
+.search input { font-size: var(--fs-sm); }
+.auth-links button { min-height: calc(var(--touch) * 0.85); font-size: var(--fs-sm); }
+
+/* ── 홈 ── */
+.quick-cards { gap: var(--sp-sm); }
+.quick-card { padding: var(--sp-md) var(--sp-xs); border-radius: var(--rd-sm); gap: var(--sp-xs); }
+.quick-icon { width: clamp(26px, 8.7cqi, 38px); height: clamp(26px, 8.7cqi, 38px); }
+.quick-card b { font-size: var(--fs-sm); }
+.quick-card small { font-size: clamp(10.5px, 2.7cqi, 12.5px); }
+.pick-row { padding: var(--sp-md); border-radius: var(--rd-sm); gap: var(--sp-sm); }
+.pick-row b { font-size: var(--fs-md); }
+.pick-row button { padding: var(--sp-sm) var(--sp-md); font-size: var(--fs-xs); border-radius: var(--rd-sm); }
+/* 탭바는 좌우 끝까지 채운다. 음수 여백을 푸터의 유동 패딩과 정확히 맞춰야
+   프레임 밖으로 2~3px 삐져나가 잘리지 않는다. */
+.footer .bottom-nav {
+  margin-left: calc(var(--sp-lg) * -1);
+  margin-right: calc(var(--sp-lg) * -1);
+  margin-bottom: calc((var(--sp-sm) + env(safe-area-inset-bottom)) * -1);
+  margin-top: var(--sp-sm);
+}
+/* 탭만 있는 화면(내 정보·기록 등)은 위쪽 여백도 없앤다.
+   mockup.css v15의 같은 선택자를 덮어써야 하므로 shorthand로 통째 지정한다. */
+.footer > .bottom-nav:only-child {
+  margin: calc(var(--sp-sm) * -1) calc(var(--sp-lg) * -1)
+    calc((var(--sp-sm) + env(safe-area-inset-bottom)) * -1);
+}
+.bottom-nav button { min-height: calc(var(--touch) * 0.9); }
+.bottom-nav i { width: clamp(20px, 6.2cqi, 27px); height: clamp(20px, 6.2cqi, 27px); }
+.bottom-nav span { font-size: clamp(10.5px, 2.8cqi, 12.5px); }
+
+/* ── 식단 구성 ── */
+.meal-list.numbered .meal-row { padding: var(--sp-md) var(--sp-lg); gap: var(--sp-md); border-radius: var(--rd-sm); }
+.meal-list.numbered .meal-row-role {
+  width: clamp(40px, 13cqi, 58px); height: clamp(40px, 13cqi, 58px); font-size: var(--fs-xs);
+}
+.meal-list.numbered .meal-row-name { font-size: var(--fs-md); }
+.compose-pill { font-size: var(--fs-sm); padding: var(--sp-sm) var(--sp-lg); }
+.hero-mark, .hero-check { width: clamp(42px, 13.8cqi, 60px); height: clamp(42px, 13.8cqi, 60px); }
+
+/* ── 영양소 카드 ── */
+.nutri-card {
+  padding: var(--sp-md); gap: var(--sp-sm); border-radius: var(--rd-sm);
+  grid-template-columns: clamp(28px, 9cqi, 40px) 1fr auto;
+}
+.nutri-icon { font-size: var(--fs-xl); }
+.nutri-name { font-size: var(--fs-xs); }
+.nutri-value { font-size: var(--fs-xl); }
+.nutri-target { font-size: var(--fs-xs); }
+.nutri-badge { font-size: var(--fs-xs); padding: var(--sp-sm) var(--sp-md); }
+.nutrient-icons span { font-size: var(--fs-xl); }
+.nutrient-icons small { font-size: var(--fs-xs); }
+.notice-card { padding: var(--sp-md); border-radius: var(--rd-sm); }
+.notice-card b { font-size: var(--fs-sm); }
+.notice-card span { font-size: var(--fs-xs); }
+
+/* ── 재조정 · 비교 ── */
+.permenu-card { padding: var(--sp-md); border-radius: var(--rd-sm); }
+.permenu-head b { font-size: var(--fs-md); }
+.tag-adjust, .tag-keep { font-size: var(--fs-xs); padding: var(--sp-xs) var(--sp-sm); }
+.permenu-changes li { font-size: var(--fs-xs); }
+.ba-item { padding: var(--sp-md); border-radius: var(--rd-sm); }
+.ba-item-name { font-size: var(--fs-xs); }
+/* 전/후 수치는 이 화면의 핵심이라 본문 최대 단계보다 한 단계 더 키운다 */
+.ba-from, .ba-to { font-size: clamp(20px, 6.2cqi, 27px); }
+.ba-from small, .ba-to small { font-size: var(--fs-sm); }
+.ba-delta { font-size: var(--fs-xs); padding: var(--sp-xs) var(--sp-md); }
+.ba-arrow svg { width: clamp(28px, 10cqi, 48px); }
+.rename-row { padding: var(--sp-md) var(--sp-sm); border-radius: var(--rd-sm); }
+.rename-before, .rename-after { font-size: var(--fs-xs); }
+.adjust-badge { font-size: var(--fs-xs); padding: var(--sp-sm) var(--sp-md); }
+.adjust-ring { width: clamp(66px, 21cqi, 96px); height: clamp(66px, 21cqi, 96px); }
+
+/* ── 레시피 ── */
+.recipe-menu-row {
+  padding: var(--sp-md); border-radius: var(--rd-sm); gap: var(--sp-md);
+  grid-template-columns: clamp(28px, 8.7cqi, 40px) 1fr 14px;
+}
+.rm-num { width: clamp(28px, 8.7cqi, 40px); height: clamp(28px, 8.7cqi, 40px); font-size: var(--fs-xs); }
+.rm-txt b { font-size: var(--fs-sm); }
+.rm-txt small { font-size: var(--fs-xs); }
+.phone .recipe-detail-head .recipe-title { font-size: var(--fs-xl); }
+.kv-row span, .kv-row b { padding: var(--sp-md); font-size: var(--fs-sm); }
+.steps.table-steps p { padding: var(--sp-md); font-size: var(--fs-sm); }
+.steps.table-steps li { grid-template-columns: clamp(36px, 11.8cqi, 52px) 1fr; }
+.dish-nutri span { font-size: var(--fs-md); }
+.dish-nutri b { font-size: var(--fs-xs); }
+.tts-row.right .tts-button { min-height: calc(var(--touch) * 0.85); font-size: var(--fs-xs); }
+.footer-actions.three button { min-height: calc(var(--touch) * 0.95); font-size: var(--fs-xs); gap: var(--sp-xs); }
+.final-tabs button { min-height: clamp(62px, 19cqi, 86px); font-size: var(--fs-xs); }
+
+/* ── 스플래시 · 온보딩 ── */
+.splash-logo { width: clamp(140px, 48cqi, 230px); }
+.login-brand img { width: clamp(110px, 36cqi, 165px); }
+.thought-bubble { padding: var(--sp-lg) var(--sp-md); }
+.thought-bubble span { font-size: var(--fs-2xl); }
+.thought-bubble small { font-size: var(--fs-xs); }
+.step-count { font-size: var(--fs-xs); padding: var(--sp-xs) var(--sp-md); }
+.preview-card { padding: var(--sp-md); border-radius: var(--rd-md); }
+
+/* ── 세로가 짧은 화면(가로모드 · SE 등)은 여백을 더 줄인다 ── */
+@media (max-height: 700px) {
+  .phone { --sp-lg: clamp(10px, 3.4cqi, 16px); --sp-md: clamp(8px, 2.4cqi, 12px); }
+  .splash-logo { width: clamp(110px, 34cqi, 160px); }
+  .thought-bubble { margin-top: var(--sp-md); }
+  .hero-center { margin-bottom: var(--sp-md); gap: var(--sp-sm); }
+}
+@media (max-height: 560px) {
+  .phone .screen h1 { font-size: var(--fs-xl) !important; }
+  .splash-logo { display: none; }
+}
+
+/* ── 컨테이너 쿼리 미지원 브라우저 폴백 (구형 기기) ── */
+@supports not (container-type: inline-size) {
+  .phone {
+    --fs-xs: 11px; --fs-sm: 13px; --fs-md: 15px; --fs-lg: 17px;
+    --fs-xl: 20px; --fs-2xl: 25px; --fs-3xl: 34px;
+    --sp-xs: 5px; --sp-sm: 8px; --sp-md: 13px; --sp-lg: 18px;
+    --rd-sm: 12px; --rd-md: 16px; --touch: 52px;
+  }
+}
+
+/* v17 — 레시피 인라인 펼침 (화면 이동 없이 그 자리에서) */
+.recipe-inline {
+  margin: 0 0 var(--sp-sm);
+  padding: var(--sp-md);
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 var(--rd-sm) var(--rd-sm);
+  background: #fff;
+  animation: recipe-open .28s ease both;
+}
+@keyframes recipe-open {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+.recipe-inline .section-title:first-of-type { margin-top: 0; }
+/* 보조 버튼(이전으로 등) — mockup.css의 .btn{background:var(--gd)}가 styles.css의
+   .btn-secondary를 덮어써서 '초록 배경 + 초록 글자'가 되어 글자가 안 보였다.
+   특이도를 올려 흰 배경 + 초록 글자로 되돌린다. */
+.btn.btn-secondary {
+  background: #fff;
+  color: var(--gd);
+  border: 1px solid #bad3bf;
+  box-shadow: none;
+}
+
+/* 아코디언 때문에 버튼을 div로 감쌌더니 그리드 직속 자식이 아니게 되어
+   내용 폭으로 줄어들었다. 가로를 꽉 채우도록 명시한다. */
+.recipe-menu-list > div { width: 100%; }
+.recipe-menu-row { width: 100%; }
+.recipe-menu-row[aria-expanded="true"] { border-radius: var(--rd-sm) var(--rd-sm) 0 0; }
+.rm-caret { transition: transform .25s ease; display: inline-block; }
+.rm-caret.open { transform: rotate(90deg); }
+
+/* ============================================================================
+   v18 — PDF 한 장 맞춤 · 표 강조
+   사진 자리를 없애고 표를 위로 당겼다. A4 한 장에 담기도록 전반적으로 압축한다.
+   ========================================================================== */
+.pdf-page { padding: 14px 16px; }
+.pdf-page h2 { font-size: 20px; margin: 12px 0 0; }
+.pdf-page h3 { font-size: 13px; margin: 14px 0 6px; }
+.pdf-brand { padding-bottom: 8px; }
+.pdf-brand img { width: 46px; height: 46px; }
+.meal-recipe-table, .nutrition-pdf-table { font-size: 9px; }
+.meal-recipe-table th, .meal-recipe-table td { padding: 5px 6px; line-height: 1.45; }
+.meal-recipe-table li { margin-bottom: 1px; }
+.pdf-notice { margin-top: 10px; }
+
+/* 표 머리행 · 첫 열을 다른 배경으로 구분 */
+.nutrition-pdf-table thead th,
+.meal-recipe-table thead th {
+  background: #E7EEE2;
+  color: #2F5836;
+  font-weight: 800;
+  border-bottom: 1.5px solid #BFD3B4;
+}
+.nutrition-pdf-table tbody th,
+.meal-recipe-table tbody th {
+  background: #F4F2EA;
+  color: #3B4A3E;
+  font-weight: 700;
+  text-align: center;
+}
+.nutrition-pdf-table tbody td:first-of-type { text-align: center; }
+.nutrition-pdf-table tbody tr:nth-child(even) td { background: #FBFBF8; }
+
+/* ============================================================================
+   v19 — 하단 탭 여백 · 흐름 버튼 폭
+   ========================================================================== */
+/* 탭이 화면 맨 아래에 딱 붙어 답답해 보여서 아래쪽 숨 쉴 공간을 준다.
+   동시에 탭 자체 세로 길이는 조금 줄인다. */
+.footer .bottom-nav,
+.footer > .bottom-nav:only-child {
+  margin-bottom: 0;
+  padding-top: var(--sp-xs);
+  padding-bottom: calc(var(--sp-sm) + env(safe-area-inset-bottom));
+  border-radius: 0;
+}
+.bottom-nav button { min-height: clamp(40px, 11cqi, 48px); gap: 2px; }
+.bottom-nav i { width: clamp(19px, 5.6cqi, 24px); height: clamp(19px, 5.6cqi, 24px); }
+
+/* 이전 / 다음 버튼을 가로로 더 넓게 */
+.flow-btn { min-width: clamp(96px, 27cqi, 132px); padding: 0 var(--sp-lg); }
+.flow-footer { gap: var(--sp-sm); }
+
+/* ============================================================================
+   v20 — 음성 안내 팝업 · 회원가입 안내 팝업
+   ========================================================================== */
+.modal.voice { max-width: 340px; text-align: left; padding: 18px 18px 16px; }
+.voice-head { display: flex; align-items: center; justify-content: space-between; }
+.voice-count {
+  font-size: var(--fs-xs); font-weight: 800; color: var(--gd);
+  background: var(--gs); border-radius: 999px; padding: 5px 12px;
+}
+.voice-close {
+  border: 0; background: transparent; color: var(--muted);
+  font-size: 19px; line-height: 1; padding: 4px 6px;
+}
+.voice-menu {
+  margin: 12px 0 0; font-size: var(--fs-sm); font-weight: 800; color: var(--muted);
+}
+.voice-body {
+  display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: start;
+  margin: 10px 0 0; padding: 14px; border-radius: var(--rd-sm);
+  background: var(--gs); min-height: 128px;
+}
+.voice-num {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--gd); color: #fff;
+  display: grid; place-items: center; font-weight: 800; font-size: var(--fs-sm);
+}
+.voice-body p {
+  margin: 0; font-size: var(--fs-md); line-height: 1.65; color: var(--ink);
+  text-align: left;
+}
+.modal.voice .ask-actions { margin-top: 16px; }
+
+/* 회원가입 안내 팝업은 문구가 길어 제목 크기를 조금 낮춘다 */
+.modal.ask h2 { font-size: var(--fs-lg); line-height: 1.45; }
+.modal.ask p { font-size: var(--fs-xs); }
+.ask-actions button { font-size: var(--fs-sm); }
+
+/* 온보딩 단계 이미지 (public/assets/onboarding-1~5.png) */
+.onboarding-shot { margin: var(--sp-md) 0 0; }
+.onboarding-shot img {
+  display: block; width: 100%; height: auto;
+  border: 1px solid var(--line); border-radius: var(--rd-md);
+  background: #fff;
+}
+
+/* PDF 문서 폭을 넓혀 세로를 줄인다 (A4 비율 1.41에 가깝게 → 축소율이 줄어 글자가 커진다) */
+.pdf-page { min-width: 860px; }
+.meal-recipe-table th:nth-child(1) { width: 8%; }
+.meal-recipe-table th:nth-child(2) { width: 16%; }
+.meal-recipe-table th:nth-child(3) { width: 30%; }
+.meal-recipe-table th:nth-child(4) { width: 46%; }
+
+/* ============================================================================
+   v21 — 온보딩 단계 이미지를 화면 한 장으로 사용
+   이미지 안에 제목과 n/5 배지가 이미 들어 있어, 화면 텍스트는 감추고 이미지만 채운다.
+   하단의 이전 / 다음 버튼은 실제 동작하는 버튼이다.
+   ========================================================================== */
+.screen.screen-full { padding: 0; overflow: hidden; }
+.onboarding-page { position: relative; width: 100%; height: 100%; }
+/* contain 이면 세로가 길어질수록 아래에 빈 띠가 남는다. cover 로 채우고
+   기준점을 위쪽에 두어, 잘리더라도 이미지 상단의 제목과 n/5 배지는 항상 보이게 한다. */
+.onboarding-page img {
+  display: block; width: 100%; height: 100%;
+  object-fit: cover; object-position: top center;
+}
+.skip.float {
+  position: absolute; top: var(--sp-sm); left: var(--sp-sm);
+  padding: 6px 12px; border-radius: 999px;
+  background: rgba(255, 255, 255, .86); color: var(--muted);
+  font-size: var(--fs-xs); font-weight: 700;
+  border: 1px solid var(--line);
+}
+
+/* ============================================================================
+   v22 — 스플래시 이미지 · 체험 안내 팝업 · 저장 목적지 통일
+   ========================================================================== */
+/* 스플래시: 시안 이미지를 손대지 않고 그대로 한 화면으로 쓴다.
+   그림 속 '시작하기' 버튼 위에 투명한 진짜 버튼만 겹쳐 눌리게 하고,
+   화면에 시각은 표시하지 않는다.
+   (위치 값은 이미지에서 픽셀 단위로 실측한 비율) */
+.splash-shot {
+  width: 100%; height: 100%;
+  /* 줄어든 이미지 둘레를 채우는 색 — 그림 테두리에서 가장 많이 나온 색(실측) */
+  background: #F7EDE0;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+  /* 자기 자신을 '크기' 컨테이너로 삼아 아래에서 100cqh(남은 세로)를 쓸 수 있게 한다 */
+  container-type: size;
+}
+/* ── 스플래시 이미지 크기 ──────────────────────────────────────────────────
+   그림 속 문구가 이미지에 그려져 있어, 글씨를 줄이려면 이미지를 줄여야 한다.
+
+   --splash-ar    이미지의 세로/가로 비율. 이미지를 교체하면 이 값만 실제 픽셀에
+                  맞춰 고치면 되고, 아래 계산은 손댈 필요가 없다.
+                    현재 onboarding-home.png = 941 × 1672 → 1672/941 = 1.777
+   --splash-scale 화면에 꽉 맞췄을 때 대비 배율. 1 = 잘림 없이 최대 크기,
+                  값을 낮출수록 그림(=글씨)이 작아지고 둘레 여백이 넓어진다.
+                  여백은 .splash-shot 배경색으로 채워져 그림과 이어져 보인다.
+
+   폭은 '세로·가로 어느 쪽도 넘치지 않는 크기'(min)에 배율을 곱해 잡는다.
+   프레임이 이미지 상자와 정확히 일치하므로, 안에 겹쳐 둔 % 좌표(시작하기 버튼)는
+   배율과 무관하게 그림 위 같은 자리에 붙어 있는다. */
+.splash-frame {
+  --splash-ar: 2.108;   /* onboarding-home.png = 864 x 1821 */
+  --splash-scale: .88;
+  position: relative;
+  flex: none;                        /* flex가 임의로 줄이지 못하게 */
+  width: calc(
+    min(100cqw, calc(100cqh / var(--splash-ar))) * var(--splash-scale)
+  );
+  aspect-ratio: 1 / var(--splash-ar);
+  /* 그림 자체의 둥근 모서리 바깥이 흰색이라, 같은 크기로 깎아 크림색 배경 위에
+     카드처럼 놓이게 한다 (흰 모서리 자국 제거) */
+  border-radius: clamp(10px, 3.5cqw, 18px);
+  overflow: hidden;
+}
+.splash-frame img {
+  display: block;
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: bottom center;
+}
+@supports not (width: 100cqh) {
+  /* 컨테이너 크기 쿼리 미지원 브라우저: 확대 없이 폭에 맞춘다 */
+  .splash-frame { width: 100%; }
+}
+
+/* 그림 속 버튼 위 투명 버튼 */
+.splash-hit {
+  position: absolute;
+  left: 22.3%; right: 24.3%; top: 92.8%; bottom: 2.8%;
+  border: 0; background: transparent; padding: 0;
+  border-radius: 999px; cursor: pointer;
+}
+.splash-hit:focus-visible { outline: 3px solid var(--gd); outline-offset: 3px; }
+.splash-hit:active { background: rgba(0, 0, 0, .07); }
+
+/* 체험 안내 팝업의 예시 프로필 표 */
+.guest-profile {
+  display: grid; gap: 1px; margin-top: 16px;
+  background: var(--line); border: 1px solid var(--line);
+  border-radius: var(--rd-sm); overflow: hidden; text-align: left;
+}
+.guest-profile div {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; padding: 11px 13px; background: var(--paper);
+}
+.guest-profile small { font-size: var(--fs-xs); color: var(--muted); }
+.guest-profile b { font-size: var(--fs-sm); font-weight: 800; color: var(--gd); }
+
+/* ============================================================================
+   모든 화면 왼쪽 위에 KOOK 로고
+   ========================================================================== */
+/* 뒤로가기 화살표 옆 브랜드 로고 (제목이 있으면 로고 → 제목 순) */
+.header-brand {
+  border: 0; background: none; padding: 0;
+  display: block; flex: 0 0 auto; cursor: pointer; line-height: 0;
+}
+/* 부모 기준 퍼센트 높이가 잡히지 않아 이미지에 직접 크기를 준다 */
+.header-brand img {
+  display: block;
+  height: clamp(28px, 8.2cqi, 38px) !important;
+  width: auto !important;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+}
+.header-brand:focus-visible { outline: 2px solid var(--gd); outline-offset: 3px; border-radius: 6px; }
+.header-lead { gap: var(--sp-xs); }
+.header-lead-title { margin-left: var(--sp-xs); }
+
+/* 이미지 한 장으로 채운 화면(온보딩 1~5) 위에 얹는 로고 */
+.shot-brand {
+  position: absolute; top: var(--sp-sm); left: var(--sp-md);
+  display: block; pointer-events: none; z-index: 2;
+}
+.shot-brand img {
+  display: block;
+  height: clamp(26px, 7.4cqi, 36px) !important;
+  width: auto !important;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+}
+/* 건너뛰기는 위쪽 가운데 — 왼쪽 로고, 오른쪽 n/5 배지와 겹치지 않는 자리 */
+.skip.float.right {
+  left: 50%; right: auto;
+  transform: translateX(-50%);
+}

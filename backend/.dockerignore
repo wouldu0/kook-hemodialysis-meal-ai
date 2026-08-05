@@ -1,0 +1,11 @@
+# 이미지에 넣지 않을 것 (용량·보안)
+# 주의: data/*.xlsx 와 식약청_영양성분*.xlsx 는 FOOK_adjust_levers.py가 런타임에 읽으므로
+#       절대 제외하면 안 된다 (제외하면 서버가 기동 중 FileNotFoundError로 죽는다).
+.venv/
+__pycache__/
+*.pyc
+.env
+~$*.xlsx
+sql/deprecated/
+changes_report.txt
+swap_report.txt
