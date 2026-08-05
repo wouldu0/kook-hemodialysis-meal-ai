@@ -1,12 +1,14 @@
 <!--
 ████████████████████████████████████████████████████████████████████
-  wouldu0 · KOOK — K-디지털 트레이닝 포트폴리오 README
+  wouldu0 · KOOK README
 ████████████████████████████████████████████████████████████████████
 -->
 
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:14301c,50:2F5836,100:7cb342&height=220&section=header&text=🍚%20KOOK&fontSize=64&fontColor=ffffff&fontAlignY=40&desc=혈액투석%20환자%20맞춤형%20AI%20식단%20관리%20솔루션&descAlignY=62&descColor=d9f0dd&animation=fadeIn" alt="header" width="100%"/>
+# 🍚 KOOK
+
+### 혈액투석 환자 맞춤형 AI 식단 관리 솔루션
 
 <br/>
 
@@ -32,19 +34,6 @@
 <sub>무료 호스팅이라 15분간 접속이 없으면 서버가 잠듭니다. 첫 화면이 뜨는 데 최대 1분 걸릴 수 있습니다.</sub>
 
 </div>
-
----
-
-## 📋 훈련 과정 정보
-
-| 항목 | 내용 |
-|:---|:---|
-| 🏫 **훈련기관** | 아시아경제 교육센터 |
-| 📚 **훈련과정명** | 융합\_데이터 기반 차세대 디지털 헬스케어 AI 솔루션 5회차 |
-| 🏷️ **훈련유형** | K-디지털 트레이닝 (고용노동부) |
-| 📅 **훈련기간** | 2026-02-03 ~ 2026-07-30 (6개월) |
-| 💡 **프로젝트 분류** | 헬스케어 AI · 생성모델(Seq2Seq) · 강화학습 · 임상영양 · 풀스택 |
-| 👤 **담당 파트** | AI 엔진 · 데이터 · 백엔드 (2인 팀 프로젝트, 프론트엔드는 팀원 담당) |
 
 ---
 
@@ -481,11 +470,5 @@ https://kook-omega.vercel.app/?api=https://다른-백엔드-주소
 <br/>
 
 *"기준을 세우고, 만들고, 넘으면 스스로 고칩니다."* 🍚🎛️
-
-<br/>
-
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:7cb342,50:2F5836,100:14301c&height=130&section=footer&text=K-디지털%20트레이닝%20|%20아시아경제%20교육센터&fontSize=15&fontColor=ffffff&fontAlignY=65" width="100%"/>
-
-**📅 2026.02 ~ 2026.07** &nbsp;|&nbsp; Made with 🍚 during K-Digital Training
 
 </div>
