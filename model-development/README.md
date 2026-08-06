@@ -13,6 +13,12 @@
 정책 경사로 파인튜닝했습니다(`train_rl_FOOK.py`). `backend/Diet-Generation-As-Sequence-master/`에
 있는 체크포인트가 이 학습의 결과물입니다.
 
+`research-log/`에는 이 모델을 두고 진행한 두 갈래의 심화 진단·실험을 정리해뒀습니다:
+- `phosphorus-protein-resolution/` — 두부·콩류 앵커의 인/단백질 레버 충돌을 13단계로 진단·해결,
+  **실제로 채택되어 서비스에 반영됨**.
+- `soup-diversity-masking/` — 국 슬롯 다양성 붕괴를 디코더 구조 수준까지 원인 규명하고 마스킹
+  학습+RL 재학습으로 해결을 검증했으나, **아직 체크포인트 교체(배포)는 하지 않음**.
+
 ### `ingredient-substitution_klue-bert-knn/`
 메뉴 재료를 저칼륨·저인 대체재로 바꿀 때 쓰는 임베딩 기반 유사도 모델. KLUE-BERT로 재료 문맥
 임베딩을 만들고(`foodbert/`), KNN으로 가장 가까운 대체재를 찾습니다(`foodbert_embeddings/`).
@@ -33,6 +39,15 @@
 | `track1_vs_track2_simple_eval_FOOK.py` | RL 체크포인트 후보 간(실험용 마스킹 버전 포함) 비교 |
 | `final_service_core_eval_FOOK.py` | 실제 production 경로(`app_core_FOOK.make_meal()`) 직접 호출로 핵심 성공률 측정 |
 | `final_service_benchmark_120_realistic_weight_FOOK.py`, `external_condition_test_FOOK.py` | 다양한 체중·메뉴·재료 조건에서의 일반화 성능(현실적 표준체중 기준으로 재검증한 버전) |
+
+`rl_v2_work/`는 리워드 함수 자체를 바꿔가며 진행한 2차 RL 튜닝 라운드(R0~R5, 리워드 가중치
+변형)의 체크포인트·학습곡선·페어 비교 결과입니다(`rl_v2_final_report.md`). 이 과정에서 기존
+비교 스크립트의 방법론 오류(`FOOK_adjust_levers.py`의 저염김치 순환선택 카운터 `ROT`가
+모듈 전역이라 리셋되지 않아, 비교 순서에 따라 같은 모델이 다른 결과를 내던 버그)를 발견해
+`rl_comparison_v2_rot_fixed_FOOK.py`로 바로잡았습니다. **결론: 새로 학습한 R2는 BASE보다는
+낫지만(성공률 102→105/120) 기존 production RL(i002, 109/120)을 넘지 못해 미채택 — production
+체크포인트는 그대로 유지.** ROT 버그 수정 후 재검증한 결과 BASE(85.0%) vs 기존 RL(90.8%)의
+우위도 이전 판정("동률")보다 더 뚜렷하게 확인됐습니다.
 
 ### `clinical-review/`
 임상영양사 검수용으로 정리한 문서 3종 — 영양 기준 산출 방식, 재료 대체 로직, 샘플 식단

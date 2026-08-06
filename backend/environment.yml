@@ -1,0 +1,28 @@
+# conda 사용자용. 개발 PC와 동일한 환경을 재현합니다.
+# 생성:  conda env create -f environment.yml
+# 활성:  conda activate foodbert
+#
+# conda를 안 쓰면 이 파일은 무시하고 requirements.txt로 설치하세요
+# (python -m venv .venv && pip install -r requirements.txt).
+name: foodbert
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - pip
+  - pip:
+      - fastapi==0.128.8
+      - uvicorn==0.39.0
+      - pydantic==2.13.4
+      - tensorflow-cpu==2.20.0
+      - tf-keras==2.20.1
+      - numpy==2.0.2
+      - pandas==2.3.3
+      - scipy==1.13.1
+      - scikit-learn==1.6.1
+      - openpyxl==3.1.5
+      - matplotlib==3.9.4
+      - seaborn==0.13.2
+      - tqdm==4.68.3
+      - openai==2.45.0

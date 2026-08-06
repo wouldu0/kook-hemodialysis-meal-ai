@@ -151,6 +151,19 @@ KOOK은 이 문제를 **"생성 → 검증 → 재조정 반복"** 구조로 풉
 | 비현실적 섭취량 발생 | 46% | ✅ **20%** |
 | 어육류 결과 변화 | — | ✅ **2,400건 전부 동일 (회귀 없음)** |
 
+> 13단계 진단→해결 전 과정은 [`model-development/generation-model_seq2seq-rl/research-log/phosphorus-protein-resolution/`](model-development/generation-model_seq2seq-rl/research-log/phosphorus-protein-resolution/ADOPTION_REPORT.md)에 남겨뒀습니다.
+
+### 🔬 검증했지만 아직 배포하지 않은 것 — 국(soup) 다양성 개선
+
+같은 앵커·같은 seed로 여러 번 생성하면 국이 소수 메뉴로 쏠리는 현상을 발견해 원인을 추적한 결과,
+디코더가 seed 시퀀스의 국 위치 토큰을 그대로 베끼는 구조적 shortcut이었습니다. 국 슬롯을 100%
+마스킹하고 재학습(C_mask100) + RL 재학습까지 마치자 국 고유 종류가 **4.1개 → 28.6개(7배)**로
+늘면서 영양 충족률도 오히려 개선(68.8% → 97.6%)됐습니다.
+
+다만 이번 세션 범위에서는 체크포인트 교체(배포)까지는 진행하지 않아, 현재 서비스는 여전히 이
+개선 이전 체크포인트를 쓰고 있습니다. 전체 진단·실험 과정은
+[`research-log/soup-diversity-masking/`](model-development/generation-model_seq2seq-rl/research-log/soup-diversity-masking/FINDINGS.md)에 정리해뒀습니다.
+
 ### 영양 상담 RAG 챗봇
 
 식단 생성과 별개로, "말린 바나나 먹어도 되나요?" 같은 자유 질문에 답하는 챗봇(`FOOK_rag_chatbot.py`,
@@ -316,6 +329,7 @@ KOOK/
 │   │   ├── FOOK_음식명_재료_조리방법.xlsx           # 메뉴별 재료 · 조리법
 │   │   ├── FOOK_recipe_steps.json               # 조리 단계
 │   │   ├── FOOK_rag_kb.json                     # 챗봇 지식베이스(청크+임베딩)
+│   │   ├── 📂 rag-source/                       # 챗봇 지식베이스 원본 출처 문서 4종
 │   │   └── 1~12월_raw.xlsx                      # 월별 식단 원본
 │   │
 │   ├── 📂 sql/
@@ -331,8 +345,10 @@ KOOK/
 │
 ├── 📂 model-development/                        # 🔬 AI 엔진 개발·검증 이력 (배포 미포함)
 │   ├── generation-model_seq2seq-rl/             # 생성모델 학습 코드(Model.py, train_FOOK.py 등)
+│   │   └── research-log/                        # 인/단백질 충돌 해결(채택) · 국 다양성 개선(미배포) 진단 기록
 │   ├── ingredient-substitution_klue-bert-knn/   # 재료 대체 모델 코드(foodbert/ 등)
 │   ├── benchmarks/                              # 성능·회귀 검증 스크립트 + 결과 리포트
+│   │   └── rl_v2_work/                          # 2차 RL 리워드 튜닝 라운드(R0~R5) 실험 기록
 │   └── clinical-review/                         # 임상영양사 검수용 문서 3종
 │
 ├── 📂 frontend/                                 # React 앱
