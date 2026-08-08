@@ -4,6 +4,41 @@
 
 ---
 
+## v12 업데이트 — DB 없이도 서버가 죽던 버그 수정 · 프론트 의존성 보안 패치
+
+### 1) `DATABASE_URL` 미설정 시 서버 전체가 기동 실패하던 버그
+- `server_FOOK.py`의 자체 주석은 "DATABASE_URL이 없으면 회원 관련 API(`/auth/*`,
+  `/me/*`)만 500을 반환하고, `/generate` 등 AI 생성 기능은 DB 없이도 정상 동작한다"고
+  설명하고 있었지만, 실제로는 그렇지 않았습니다.
+- 원인: `database.py`가 모듈 **import 시점**에 `DATABASE_URL`이 비어 있으면
+  `RuntimeError`를 던지도록 되어 있었고, `server_FOOK.py`는 파일 최상단에서
+  `from database import db`를 실행합니다. 즉 DB 연결 정보가 없으면 AI 엔진(TensorFlow
+  모델 로딩 포함)까지 포함한 **서버 프로세스 자체가 뜨지 못하고 죽었습니다.**
+- 수정: `database.py`의 `engine` 생성을 지연시켜, `DATABASE_URL`이 없어도 모듈 import는
+  성공하고 실제로 `db()`(DB 연결)를 호출하는 회원 관련 라우트에서만 에러가 나도록
+  바꿨습니다. 코드가 처음부터 의도했던 동작(주석에 적힌 그대로)과 일치시켰습니다.
+- 이 문제는 실제로 로컬에서 `DATABASE_URL` 없이 서버를 띄워보다가 발견했습니다 —
+  정적 코드 리뷰만으로는 안 보이고, 실제 기동 시도에서만 드러나는 종류의 버그였습니다.
+
+### 2) 프론트엔드 의존성 보안 취약점 6건 패치
+- `npm audit`에서 jsPDF(치명적 등급 1건 포함: 경로 순회·PDF 삽입 공격 등)·
+  dompurify·nanoid·postcss·react-router/react-router-dom에서 취약점 6건이 발견됐습니다.
+- jsPDF는 3.0 → 4.2.1로 메이저 버전이 올라가는 변경이라, 이 프로젝트가 실제로 쓰는
+  API(`new jsPDF()`, `addImage()`, `save()` — `PdfPreview` 컴포넌트)가 영향받는지
+  확인 후 적용했습니다. 나머지는 비파괴적(non-breaking) 패치입니다.
+
+### 검증
+- ✅ 로컬에서 `DATABASE_URL` 없이 백엔드를 직접 띄워 `/health`·`/generate`·
+  `/generate_day`·`/menus`·`/menus_by_ingredient`·`/recipe`·`/tts`·`/chat`이 정상
+  동작(또는 문서화된 대로 안전하게 실패)하는지 확인
+- ✅ `DATABASE_URL` 없이 `/auth/signup` 호출 시 서버가 죽지 않고 500만 반환하는지 확인
+- ✅ 프론트엔드 `npm run build`(TypeScript 검사 + Vite 프로덕션 빌드) 성공
+- ✅ 로컬에서 프론트+백엔드를 함께 띄우고 브라우저로 비회원 체험 흐름(한 끼 생성 →
+  영양 판정 → 레시피 재구성)을 끝까지 클릭해 콘솔 에러 없음과 PDF 다운로드 정상
+  동작(jsPDF 4.2 기준) 확인
+
+---
+
 ## v11 업데이트 — 브랜드 KOOK 전환 · 노인 친화 UI · 음성 안내 · 계정 찾기
 
 ### 1) 로고를 KOOK으로 교체

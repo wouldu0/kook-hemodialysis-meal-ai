@@ -1,17 +1,29 @@
-# FOOK v5 데이터 연동 프로토타입
+# KOOK 프론트엔드
+
+React + TypeScript + Vite. 백엔드(FastAPI, `../backend`)의 `/generate` 등 API를 호출해
+실제 AI 식단 생성·영양 조정 결과를 보여줍니다.
 
 ## 실행
-```powershell
+
+```bash
+cp .env.example .env   # VITE_API_URL — 기본값은 로컬 백엔드(127.0.0.1:8000)
 npm install
 npm run dev
 ```
 
-## 반영 데이터
-- FOOK_menu_master.xlsx: 824개 메뉴의 재료, 조리과정, 영양정보
-- FOOK_diet_1_12_kor.csv: 365일 × 아침·점심·저녁 식단 조합
-- FOOK_ingredients_kor.csv: 497개 식재료 영양정보
+`http://localhost:5173` 접속. 개발 모드는 기본적으로 로컬 백엔드를 사용합니다.
+
+## 빌드
+
+```bash
+npm run build   # tsc -b && vite build
+```
 
 ## 앱 흐름
-온보딩 → 체험/프로필 → 음식·재료 검색 → 실제 식단 선택 → 식단 생성 → 영양 분석 → 식단 조정 → 조정 결과 → 최종 식단 → 레시피/PDF
 
-식단 조정 값은 현재 알고리즘 연동 전의 시연용 규칙입니다. 원본 영양정보와 레시피/재료는 업로드 데이터에서 읽습니다.
+온보딩 → 로그인/체험 → 음식·재료 검색 → 식단 생성 → 영양 적합성 판정 →
+레시피 재구성(레버 조정) → 최종 식단 확인 → 레시피 상세(음성 안내) / PDF 저장
+
+식단 생성·영양 판정·재조정은 백엔드의 실제 Seq2Seq+RL 생성 모델과 영양소 조정 레버
+결과를 그대로 씁니다(`src/App.tsx`의 `apiFetch`). 백엔드가 연결되지 않았을 때만
+`src/fookData.ts`의 내장 데이터로 조용히 폴백합니다.

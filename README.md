@@ -255,7 +255,7 @@ KOOK은 이 문제를 **"생성 → 검증 → 재조정 반복"** 구조로 풉
 | **UI** | React 19.1 · TypeScript 5.8 | 화면 구성 및 타입 안전성 |
 | **빌드** | Vite 7.1 | 개발 서버 및 프로덕션 빌드 |
 | **라우팅** | react-router-dom 7.8 | 화면 전환 |
-| **PDF** | jsPDF 3.0 · html2canvas 1.4 | 브라우저에서 A4 1장 PDF 생성 |
+| **PDF** | jsPDF 4.2 · html2canvas 1.4 | 브라우저에서 A4 1장 PDF 생성 |
 | **음성** | Web Speech API (+ OpenAI TTS 대체) | 조리 과정 음성 안내 |
 | **반응형** | CSS Container Query · clamp() | 모든 휴대폰 화면 크기에 유동 대응 |
 

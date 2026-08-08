@@ -1,18 +1,7 @@
----
-title: KOOK Backend
-emoji: 🍲
-colorFrom: green
-colorTo: gray
-sdk: docker
-app_port: 7860
-pinned: false
-short_description: 투석환자 맞춤 AI 식단 생성 API (FastAPI + TensorFlow)
----
-
 # KOOK 백엔드 API
 
 투석 환자를 위한 한 끼 식단을 생성·조정하는 API 서버입니다.
-프론트엔드(React)는 별도로 Vercel에 배포되어 있고, 이 Space는 API만 제공합니다.
+프론트엔드(React)는 별도로 Vercel에 배포되어 있고, 이 서버(Render)는 API만 제공합니다.
 
 ## 주요 엔드포인트
 
@@ -40,12 +29,12 @@ short_description: 투석환자 맞춤 AI 식단 생성 API (FastAPI + TensorFlo
 - **영양 기준**: 대한신장학회 투석환자 영양관리 지침 기반
 - **DB**: Neon Postgres (회원·저장 식단·즐겨찾기)
 
-## 환경변수 (Space Settings → Variables and secrets)
+## 환경변수 (Render 대시보드 → Environment, 또는 `render.yaml` Blueprint)
 
 | 이름 | 필수 | 설명 |
 |---|---|---|
-| `DATABASE_URL` | ✅ | Neon Postgres 접속 문자열 |
-| `CORS_ORIGINS` | ✅ | 허용할 프론트엔드 주소 (쉼표 구분) |
+| `DATABASE_URL` | 선택 | Neon Postgres 접속 문자열. 없으면 회원 관련 API(`/auth/*`, `/me/*`)만 500을 반환하고, `/generate` 등 AI 생성 기능은 정상 동작한다 |
 | `OPENAI_API_KEY` | 선택 | `/recipe`, `/tts`, `/chat` 에서만 사용 |
+| `CORS_ORIGINS` | 선택 | 허용할 프론트엔드 주소(쉼표 구분). 기본값은 로컬 개발 주소이며, 배포된 `*.vercel.app`은 `CORS_ORIGIN_REGEX` 기본값으로 이미 허용된다 |
 
-> 메모리 사용량은 TensorFlow 모델 상주 기준 약 470MB입니다.
+> 메모리 사용량은 TensorFlow 모델 상주 기준 약 410MB입니다(루트 README [실측 성능] 참고).
