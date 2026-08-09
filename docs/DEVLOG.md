@@ -4,6 +4,45 @@
 
 ---
 
+## v20 업데이트 — App.tsx 구조 정리 3차-c2: `pages/meal/` 2부 (생성 workflow 전체)
+
+3차-c의 두 번째 묶음. `Home → Generating → MealResult → Analysis → Adjusting →
+Comparison → FinalMeal`로 이어지는 핵심 생성 흐름 6개 화면을 한 번에 옮기고,
+반드시 한 흐름으로 이어서 브라우저 검증했다(사용자가 명시적으로 요청한 방식 —
+이 흐름은 화면 간 상태 의존이 커서 따로따로 검증하면 의미가 없다).
+
+### 새로 생긴 파일
+- `pages/meal/GeneratingPage.tsx`, `MealResultPage.tsx`, `AnalysisPage.tsx`,
+  `AdjustingPage.tsx`, `ComparisonPage.tsx`, `FinalMealPage.tsx`
+- `utils/auth.ts` — `requireUser`(로그인 안 돼 있으면 `/login`으로 보내는
+  가드). FinalMealPage와, 아직 App.tsx에 남아있는 Recipe가 둘 다 써서
+  공용 유틸로 뺐다.
+
+### 정리
+- App.tsx에 남아있던 orphan 주석 2곳을 제자리로 옮겼다: 음성 안내 관련
+  주석은 `hooks/useSpeech.ts`로, `/recipe` steps 형식 관련 주석은
+  `components/meal/RecipeBody.tsx`로(3a/c1 단계에서 함수만 옮기고 주석은
+  놓쳤던 것을 이번에 발견해 바로잡음).
+
+### 검증
+- ✅ `npx tsc -b --force`(캐시 무시) 통과, `npm run build` 통과
+- ✅ 백엔드 pytest 37개 통과(무변경)
+- ✅ 로컬 백엔드+프론트로 전체 흐름을 하나로 이어서 실제 클릭 검증: 홈에서
+  메뉴 선택 → 생성 중 화면 → 생성된 식단(가자미구이 포함, 실제 서버 응답) →
+  영양 판정(단백질·인 초과 → "레시피 재구성하러 가기") → 재구성 중 화면
+  (실제 변경 내역 "배추김치 → 저염오이김치", "양 조절 6건") → 재구성 완료
+  (음식별 before/after 재료량) → 최종 식단(모든 영양소 "적절"로 개선,
+  611kcal·단백질 24g 등) → 레시피 인라인 펼치기(실제 재료·영양성분 표시,
+  OPENAI_API_KEY 미설정으로 조리과정만 예상대로 오류) 확인
+
+App.tsx: 1,121줄 → 412줄
+
+이제 App.tsx엔 `Recipe`, `PdfPreview`만 남았다(3c3). 목표(500~1,000줄)보다
+이미 낮아졌지만, 남은 두 화면도 옮기고 나면 `App()` 루트 컴포넌트와
+`ErrorBoundary`만 남는 자연스러운 결과라 그대로 진행한다.
+
+---
+
 ## v19 업데이트 — App.tsx 구조 정리 3차-c1: `pages/meal/` 1부 (Home, DayPlan)
 
 3차(가장 위험도 높은 단계)를 통째로 옮기지 않고, 사용자 제안대로 더 잘게

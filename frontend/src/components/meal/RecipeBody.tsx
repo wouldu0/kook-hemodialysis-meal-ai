@@ -6,6 +6,9 @@ import { menuMap, parseLocalIngredient } from "../../utils/menu";
 import { fmt, fmt2, nmeta } from "../../utils/nutrition";
 import { SpeakerIcon } from "../icons";
 
+// 서버 /recipe의 steps는 배열이 아니라 '여러 줄 문자열'로 올 수 있다
+// (recipe_editor_FOOK.edit_recipe가 LLM 응답 텍스트를 그대로 반환한다).
+// 어떤 형태로 와도 화면이 깨지지 않게 문자열 배열로 맞춰준다.
 function toSteps(v: unknown): string[] {
   if (Array.isArray(v)) return v.map((x) => String(x).trim()).filter(Boolean);
   if (typeof v === "string")
