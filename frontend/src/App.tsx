@@ -12,7 +12,6 @@ import {
   useNavigate,
   useParams,
 } from "react-router-dom";
-import { dietPlans, ingredientData, menuData } from "./fookData";
 import type {
   ApiResult,
   MealTime,
@@ -23,19 +22,12 @@ import type {
 import {
   addSaved,
   currentUser,
-  generateDayPlan,
   generateMeal,
-  generateRecipe,
-  getMenus,
-  getMenusByIngredient,
-  getIngredients,
   saveEverywhere,
-  textToSpeech,
   warmupBackend,
 } from "./services/api";
 import { AppContext, useApp } from "./hooks/useApp";
-import { MEAL_TIMES, defaultMealTime, todayISO } from "./utils/date";
-import { fallbackPlan, labels, menuMap, parseLocalIngredient, roleLong, roleShort } from "./utils/menu";
+import { fallbackPlan, labels, menuMap, parseLocalIngredient, roleShort } from "./utils/menu";
 import {
   adjustedNutrition,
   fmt,
@@ -49,11 +41,10 @@ import {
   totalNutrition,
 } from "./utils/nutrition";
 import type { NStatus, ParsedChange } from "./utils/nutrition";
-import { BellIcon, BookmarkIcon, BowlIcon, ChartIcon, CheckIcon, ClipboardIcon, DiceIcon, DocIcon, HomeIcon, LeafIcon, RefreshIcon, SearchIcon, SlidersIcon, SpeakerIcon, UserIcon } from "./components/icons";
+import { BookmarkIcon, BowlIcon, ChartIcon, CheckIcon, ClipboardIcon, DocIcon, HomeIcon, RefreshIcon } from "./components/icons";
 import { Logo } from "./components/Logo";
 import { Button } from "./components/layout/Button";
 import { Shell } from "./components/layout/Shell";
-import { Header } from "./components/layout/Header";
 import { BackHeader } from "./components/layout/BackHeader";
 import { BottomNav } from "./components/layout/BottomNav";
 import { StepHeader } from "./components/layout/StepHeader";
@@ -69,6 +60,12 @@ import { ProfileSetupPage } from "./pages/auth/ProfileSetupPage";
 import { AccountPage } from "./pages/account/AccountPage";
 import { LibraryPage } from "./pages/account/LibraryPage";
 import { TipsPage } from "./pages/account/TipsPage";
+import { HomePage } from "./pages/meal/HomePage";
+import { DayPlanPage } from "./pages/meal/DayPlanPage";
+import { MealListRow } from "./components/meal/MealListRow";
+import { MealSlotDialog } from "./components/meal/MealSlotDialog";
+import { RecipeBody } from "./components/meal/RecipeBody";
+import { RecipeList } from "./components/meal/RecipeList";
 
 const initialProfile: Profile = {
   gender: "여성",
@@ -89,61 +86,6 @@ const requireUser = (nav: ReturnType<typeof useNavigate>) => {
 // 요구사항: "눌러야 나온다" — 화면에 들어왔다고 저절로 읽지 않고, 버튼을 누른 순간에만 읽는다.
 // 브라우저 내장 음성합성(무료·즉시 재생·오프라인)을 우선 쓰고, 그게 없는 환경에서만
 // 서버 /tts(OpenAI)를 부른다. 서버 TTS는 OPENAI_API_KEY가 없으면 실패하므로 폴백 순서가 중요하다.
-function useSpeech() {
-  const [speaking, setSpeaking] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const stop = () => {
-    if (typeof window !== "undefined" && window.speechSynthesis)
-      window.speechSynthesis.cancel();
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
-    setSpeaking(false);
-  };
-  useEffect(() => stop, []);
-  const speak = async (text: string) => {
-    stop();
-    const clean = text.replace(/\s+/g, " ").trim();
-    if (!clean) return;
-    const synth = typeof window !== "undefined" ? window.speechSynthesis : null;
-    if (synth) {
-      // 음성 목록은 비동기로 채워지는 브라우저가 있어서, 비어 있으면 한 번 기다렸다 다시 본다.
-      let voices = synth.getVoices();
-      if (!voices.length) {
-        await new Promise<void>((res) => {
-          const t = setTimeout(res, 800);
-          synth.onvoiceschanged = () => {
-            clearTimeout(t);
-            res();
-          };
-        });
-        voices = synth.getVoices();
-      }
-      const u = new SpeechSynthesisUtterance(clean);
-      const ko = voices.find((v) => /^ko/i.test(v.lang));
-      if (ko) u.voice = ko; // lang만 지정하면 무시하는 브라우저가 있어 음성을 직접 지정한다
-      u.lang = "ko-KR";
-      u.rate = 0.9; // 어르신이 따라오기 쉽도록 조금 느리게
-      u.onend = () => setSpeaking(false);
-      u.onerror = () => setSpeaking(false);
-      setSpeaking(true);
-      synth.speak(u);
-      return;
-    }
-    setSpeaking(true);
-    try {
-      const blob = await textToSpeech(clean);
-      const audio = new Audio(URL.createObjectURL(blob));
-      audioRef.current = audio;
-      audio.onended = () => setSpeaking(false);
-      await audio.play();
-    } catch {
-      setSpeaking(false);
-    }
-  };
-  return { speak, stop, speaking };
-}
 // 어느 화면에서 렌더 오류가 나도 흰 화면이 되지 않도록 막는다.
 // (예전에 '빈 화면'이 보이던 상황에서 원인을 바로 알 수 있게 메시지도 띄운다)
 class ErrorBoundary extends Component<
@@ -233,8 +175,8 @@ function App() {
         <Route path="/find-password" element={<FindPasswordPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/profile" element={<ProfileSetupPage />} />
-        <Route path="/home" element={<Home />} />
-        <Route path="/day" element={<DayPlan />} />
+        <Route path="/home" element={<HomePage />} />
+        <Route path="/day" element={<DayPlanPage />} />
         <Route path="/tips" element={<TipsPage />} />
         <Route path="/account" element={<AccountPage />} />
         <Route path="/history" element={<LibraryPage mode="history" />} />
@@ -252,298 +194,6 @@ function App() {
       </Routes>
       </ErrorBoundary>
     </AppContext.Provider>
-  );
-}
-function Home() {
-  const nav = useNavigate();
-  const { query, setQuery, setPlan, searchMode, setSearchMode, setApiResult } =
-    useApp();
-  const [menuList, setMenuList] = useState<string[]>([]);
-  const [ingList, setIngList] = useState<string[]>([]);
-  // 데이터 출처 배지는 요청에 따라 화면에서 뺐다. 목록 로딩만 그대로 둔다.
-  // 재료 검색 모드에서 '이 재료가 들어간 메뉴' 목록. 재료를 고르면 채워진다.
-  const [ingQuery, setIngQuery] = useState("");
-  const [ingMenus, setIngMenus] = useState<string[] | null>(null);
-  const [ingLoading, setIngLoading] = useState(false);
-  const [randomAsk, setRandomAsk] = useState(false);
-  const user = currentUser();
-  useEffect(() => {
-    Promise.all([getMenus(), getIngredients()])
-      .then(([m, i]) => {
-        setMenuList(m.menus || []);
-        setIngList(i.ingredients || []);
-      })
-      .catch(() => {
-        // 서버 미연결이면 로컬 예시 데이터로 자동 폴백된다(아래 names/ingredients).
-      });
-  }, []);
-  const localMenus = menuData.map((m) => m.name);
-  const names = menuList.length ? menuList : localMenus;
-  const suggestions = (
-    query.trim()
-      ? names.filter((n) => n.includes(query.trim()))
-      : names.filter((n) => /된장국|구이|볶음/.test(n))
-  ).slice(0, 8);
-  const ingredients = ingList.length
-    ? ingList
-    : ingredientData.map((x) => x.name);
-  const ingSuggestions = ingredients
-    .filter((x) => x.includes(ingQuery.trim()))
-    .slice(0, 8);
-  const choose = (name: string) => {
-    setQuery(name);
-    const p = dietPlans.find((x) => x.menus.includes(name)) as Plan | undefined;
-    if (p) setPlan(p);
-  };
-  // 재료를 하나 고르면, 그 재료가 실제로 들어간 메뉴를 서버에서 찾아 보여준다.
-  const pickIngredient = (ing: string) => {
-    setIngQuery(ing);
-    setIngMenus(null);
-    setIngLoading(true);
-    getMenusByIngredient(ing)
-      .then((d) => setIngMenus(d.menus || []))
-      .catch(() => setIngMenus([]))
-      .finally(() => setIngLoading(false));
-  };
-  const chooseFromIngredient = (menuName: string) => {
-    setQuery(menuName);
-    setSearchMode("menu"); // /generate에는 결국 menu 조건으로 넘어간다
-    const p = dietPlans.find((x) => x.menus.includes(menuName)) as
-      Plan | undefined;
-    if (p) setPlan(p);
-  };
-  const canGenerate =
-    searchMode === "random" ||
-    (searchMode === "menu" && query.trim().length > 0) ||
-    (searchMode === "ingredient" && query.trim().length > 0);
-  return (
-    <Shell
-      footer={
-        // 하단 탭바는 화면 맨 아래에 고정하고, 그 바로 위에 선택/생성 버튼을 둔다.
-        <>
-          <Button
-            disabled={!canGenerate}
-            onClick={() => {
-              setApiResult(null);
-              nav("/generating");
-            }}
-          >
-            {canGenerate
-              ? "선택한 조건으로 식단 생성하기"
-              : searchMode === "ingredient"
-                ? "재료가 들어간 메뉴를 선택해주세요"
-                : "메뉴를 검색하거나 선택해주세요"}
-          </Button>
-          <BottomNav active="home" />
-        </>
-      }
-    >
-      <h1 className="greeting">
-        안녕하세요, <b>{user?.name || "회원"}님!</b>
-      </h1>
-      <p className="sub">
-        건강한 한 끼, <b className="brand-word">KOOK</b>이 함께합니다.
-      </p>
-      {/* 목업 1: 음식 검색 / 재료 검색 / 랜덤 추천 3분할 카드 */}
-      <div className="quick-cards">
-        <button
-          className={searchMode === "menu" ? "quick-card active" : "quick-card"}
-          onClick={() => setSearchMode("menu")}
-        >
-          <span className="quick-icon">
-            <SearchIcon />
-          </span>
-          <b>음식 검색</b>
-          <small>메뉴명을 검색해보세요</small>
-        </button>
-        <button
-          className={
-            searchMode === "ingredient" ? "quick-card active" : "quick-card"
-          }
-          onClick={() => {
-            setSearchMode("ingredient");
-            setIngMenus(null);
-            setIngQuery("");
-          }}
-        >
-          <span className="quick-icon">
-            <LeafIcon />
-          </span>
-          <b>재료 검색</b>
-          <small>재료로 메뉴를 찾아보세요</small>
-        </button>
-        <button
-          className={
-            searchMode === "random" ? "quick-card active" : "quick-card"
-          }
-          onClick={() => {
-            setSearchMode("random");
-            setQuery("");
-            setRandomAsk(true); // 랜덤 탭은 안내문 대신 확인 팝업을 띄운다
-          }}
-        >
-          <span className="quick-icon">
-            <DiceIcon />
-          </span>
-          <b>랜덤 추천</b>
-          <small>AI가 랜덤으로 추천해드려요</small>
-        </button>
-      </div>
-      {searchMode === "menu" && (
-        <>
-          <div className="search">
-            <SearchIcon />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="메뉴명을 검색해보세요 (예: 두부, 계란찜, 소고기)"
-            />
-            <span className="search-filter">
-              <SlidersIcon />
-            </span>
-          </div>
-          <div className="result-head">
-            <h2 className="section-title">음식 검색 결과</h2>
-            <span className="sort-pill">최신순 ⌄</span>
-          </div>
-          <div className="pick-list">
-            {suggestions.map((n) => (
-              <article
-                key={n}
-                className={query === n ? "pick-row active" : "pick-row"}
-              >
-                <b>{n}</b>
-                <button onClick={() => choose(n)}>
-                  {query === n ? "선택됨" : "선택하기"}
-                </button>
-              </article>
-            ))}
-            {suggestions.length === 0 && (
-              <div className="info-box">
-                <b>검색 결과가 없어요</b>
-                <span>다른 메뉴명으로 다시 검색해보세요.</span>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-      {searchMode === "ingredient" && (
-        <>
-          <div className="search">
-            <SearchIcon />
-            <input
-              value={ingQuery}
-              onChange={(e) => {
-                setIngQuery(e.target.value);
-                setIngMenus(null);
-                setQuery("");
-              }}
-              placeholder="사용하고 싶은 재료를 검색하세요"
-            />
-          </div>
-          {ingMenus === null ? (
-            <>
-              <div className="result-head">
-                <h2 className="section-title">재료 검색 결과</h2>
-              </div>
-              <div className="pick-list">
-                {ingSuggestions.map((n) => (
-                  <article className="pick-row" key={n}>
-                    <b>{n}</b>
-                    <button onClick={() => pickIngredient(n)}>메뉴 보기</button>
-                  </article>
-                ))}
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="ingredient-picked-row">
-                <span>
-                  '<b>{ingQuery}</b>'가 들어간 메뉴
-                </span>
-                <button
-                  className="link-button"
-                  onClick={() => {
-                    setIngMenus(null);
-                    setQuery("");
-                  }}
-                >
-                  다시 검색
-                </button>
-              </div>
-              {ingLoading && (
-                <div className="recipe-loading">
-                  <div className="spinner" />
-                  <span>메뉴를 찾고 있어요...</span>
-                </div>
-              )}
-              {!ingLoading && ingMenus.length === 0 && (
-                <div className="info-box">
-                  <b>일치하는 메뉴를 찾지 못했어요</b>
-                  <span>다른 재료로 다시 검색해보세요.</span>
-                </div>
-              )}
-              <div className="pick-list">
-                {ingMenus.slice(0, 20).map((n) => (
-                  <article
-                    key={n}
-                    className={query === n ? "pick-row active" : "pick-row"}
-                  >
-                    <span className="pick-main">
-                      <b>{n}</b>
-                      <small>{ingQuery} 포함</small>
-                    </span>
-                    <button onClick={() => chooseFromIngredient(n)}>
-                      {query === n ? "선택됨" : "선택하기"}
-                    </button>
-                  </article>
-                ))}
-              </div>
-            </>
-          )}
-        </>
-      )}
-      {searchMode === "random" && !randomAsk && (
-        <button className="random-again" onClick={() => setRandomAsk(true)}>
-          🎲 랜덤 추천 다시 받기
-        </button>
-      )}
-      {/* 랜덤 추천 확인 팝업: 왼쪽 아니오 / 오른쪽 네 */}
-      {randomAsk && (
-        <div className="modal-bg" onClick={() => setRandomAsk(false)}>
-          <div className="modal ask" onClick={(e) => e.stopPropagation()}>
-            <span className="modal-mark">🎲</span>
-            <h2>랜덤으로 식단 추천 해드릴까요?</h2>
-            <p>
-              먹고 싶은 음식을 고르지 않아도
-              <br />
-              KOOK AI가 영양 기준에 맞는 한 끼를 만들어드려요.
-            </p>
-            <div className="ask-actions">
-              <button
-                className="ask-no"
-                onClick={() => {
-                  setRandomAsk(false);
-                  setSearchMode("menu");
-                }}
-              >
-                아니오
-              </button>
-              <button
-                className="ask-yes"
-                onClick={() => {
-                  setRandomAsk(false);
-                  setApiResult(null);
-                  nav("/generating");
-                }}
-              >
-                네
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </Shell>
   );
 }
 function Generating() {
@@ -643,23 +293,6 @@ function Generating() {
         )}
       </div>
     </Shell>
-  );
-}
-function MealListRow({
-  name,
-  role,
-  onClick,
-}: {
-  name: string;
-  role: string;
-  onClick: () => void;
-}) {
-  return (
-    <button className="meal-row" onClick={onClick}>
-      <span className="meal-row-role">{role}</span>
-      <b className="meal-row-name">{name}</b>
-      <i className="meal-row-arrow">›</i>
-    </button>
   );
 }
 function MealResult() {
@@ -1124,58 +757,6 @@ function Comparison() {
 }
 // 식단을 기록할 때 날짜와 끼니를 고르는 팝업.
 // 여기서 고른 값에 따라 '식단 관리'의 아침/점심/저녁 섹션으로 들어간다.
-function MealSlotDialog({
-  onCancel,
-  onConfirm,
-}: {
-  onCancel: () => void;
-  onConfirm: (date: string, time: MealTime) => void;
-}) {
-  const [date, setDate] = useState(todayISO());
-  const [time, setTime] = useState<MealTime>(defaultMealTime());
-  return (
-    <div className="modal-bg" onClick={onCancel}>
-      <div className="modal ask slot" onClick={(e) => e.stopPropagation()}>
-        <span className="modal-mark">🍽</span>
-        <h2>언제 먹은 식단인가요?</h2>
-        <p>
-          날짜와 끼니를 고르면
-          <br />
-          식단 관리의 해당 섹션에 기록돼요.
-        </p>
-        <label className="slot-date">
-          <span>날짜</span>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-        </label>
-        <div className="slot-times">
-          {MEAL_TIMES.map((t) => (
-            <button
-              key={t}
-              type="button"
-              className={`slot-chip${t === time ? " on" : ""}`}
-              aria-pressed={t === time}
-              onClick={() => setTime(t)}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-        <div className="ask-actions">
-          <button className="ask-no" onClick={onCancel}>
-            취소
-          </button>
-          <button className="ask-yes" onClick={() => onConfirm(date, time)}>
-            기록하기
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 function FinalMeal() {
   const nav = useNavigate();
   const { plan, apiResult } = useApp();
@@ -1307,282 +888,6 @@ function FinalMeal() {
 // 서버 /recipe의 steps는 배열이 아니라 '여러 줄 문자열'로 올 수 있다
 // (recipe_editor_FOOK.edit_recipe가 LLM 응답 텍스트를 그대로 반환한다).
 // 어떤 형태로 와도 화면이 깨지지 않게 문자열 배열로 맞춰준다.
-function toSteps(v: unknown): string[] {
-  if (Array.isArray(v)) return v.map((x) => String(x).trim()).filter(Boolean);
-  if (typeof v === "string")
-    return v
-      .split(/\r?\n/)
-      // 화면이 번호를 따로 붙이므로 원문 앞의 번호(1. / 1) / ① / - 등)는 떼어낸다
-      .map((line) =>
-        line.replace(/^\s*(\d+\s*[.)]|[①-⑳]|[-*·])\s*/, "").trim(),
-      )
-      .filter(Boolean);
-  return [];
-}
-// 레시피 본문(재료 · 조리과정 · 영양성분 · 음성안내).
-// 목록에서 음식을 고르면 화면을 옮기지 않고 이 컴포넌트만 그 자리에서 펼친다.
-function RecipeBody({ menuName }: { menuName: string }) {
-  const { apiResult } = useApp();
-  // 서버가 이 끼를 생성하며 실제로 계산한 재료(dish_ingredients)를 최우선으로 쓴다.
-  // 재료 교체로 이름이 바뀐 메뉴는 recipe_source에 원래 이름이 있어 조리법은 원본 기준 조회.
-  const serverIngredients: [string, number][] | undefined =
-    apiResult?.dish_ingredients?.[menuName];
-  const recipeSourceName: string | undefined =
-    apiResult?.recipe_source?.[menuName];
-  const m = menuMap.get(menuName); // 서버 데이터가 없을 때 쓰는 로컬 폴백
-  const ingredients: [string, number][] =
-    serverIngredients || (m?.ingredients || []).map(parseLocalIngredient);
-  const nutrition = apiResult?.dish_nutrition?.[menuName] || m?.nutrition;
-  const isServerNutrition = !!apiResult?.dish_nutrition?.[menuName];
-
-  const [steps, setSteps] = useState<string[] | null>(null);
-  const [loadingRecipe, setLoadingRecipe] = useState(false);
-  const [recipeError, setRecipeError] = useState("");
-  // 음성 안내 팝업에서 지금 읽고 있는 단계 (-1 = 팝업 닫힘)
-  const [voiceStep, setVoiceStep] = useState(-1);
-  const speech = useSpeech();
-
-  useEffect(() => {
-    setSteps(null);
-    setRecipeError("");
-    if (!serverIngredients || !serverIngredients.length) return;
-    let live = true;
-    setLoadingRecipe(true);
-    generateRecipe({
-      menu: menuName,
-      ingredients: serverIngredients,
-      source: recipeSourceName,
-    })
-      .then((d) => {
-        if (!live) return;
-        if (d.error) setRecipeError(d.error);
-        else setSteps(toSteps(d.steps));
-      })
-      .catch(() => {
-        if (live) setRecipeError("조리법을 불러오지 못했어요.");
-      })
-      .finally(() => live && setLoadingRecipe(false));
-    return () => {
-      live = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [menuName]);
-
-  const displaySteps: string[] =
-    steps ?? (m?.steps?.length ? toSteps(m.steps) : []);
-  const recipeSpeech = [
-    `${menuName} 조리 순서입니다.`,
-    ...displaySteps.map((s, i) => `${i + 1}번. ${s}`),
-  ].join(" ");
-  // 서버 데이터도 로컬 데이터도 없는 메뉴(주소로 직접 들어온 경우 등)
-  const noData =
-    ingredients.length === 0 && displaySteps.length === 0 && !loadingRecipe;
-
-  return (
-    <>
-      {recipeSourceName && recipeSourceName !== menuName && (
-        <p className="recipe-note">
-          재료 대체로 '{recipeSourceName}' 레시피를 기준으로 조리법을 조정했어요.
-        </p>
-      )}
-      {noData ? (
-        <div className="info-box">
-          <b>이 메뉴의 레시피 정보가 없어요</b>
-          <span>
-            식단을 새로 만들면 이번 끼에 쓰인 재료와 조리과정을 볼 수 있어요.
-          </span>
-        </div>
-      ) : (
-        <>
-          <h2 className="section-title">재료</h2>
-          <div className="kv-table">
-            {ingredients.map(([ing, amt], i) => (
-              <div className="kv-row" key={`${ing}-${i}`}>
-                <span>{ing}</span>
-                <b>{amt > 0 ? `${fmt2(amt)} g` : "적당량"}</b>
-              </div>
-            ))}
-            {ingredients.length === 0 && (
-              <div className="kv-row">
-                <span>등록된 재료가 없습니다.</span>
-                <b>-</b>
-              </div>
-            )}
-          </div>
-          <h2 className="section-title">
-            조리과정
-            {steps && <span className="tag-ai">AI 편집</span>}
-          </h2>
-          {loadingRecipe && (
-            <div className="recipe-loading">
-              <div className="spinner" />
-              <span>AI가 회원님 식단에 맞춰 조리법을 다듬고 있어요...</span>
-            </div>
-          )}
-          {!loadingRecipe && recipeError && (
-            <p className="form-error">{recipeError}</p>
-          )}
-          {!loadingRecipe && (
-            <ol className="steps table-steps">
-              {(displaySteps.length
-                ? displaySteps
-                : ["등록된 조리과정이 없습니다."]
-              ).map((x, i) => (
-                <li key={i} className="step-reveal">
-                  <span>{i + 1}</span>
-                  <p>{x}</p>
-                </li>
-              ))}
-            </ol>
-          )}
-          <h2 className="section-title">영양 성분</h2>
-          <div className="dish-nutri">
-            {nmeta.map((n) => (
-              <div key={n.key}>
-                <span>{n.icon}</span>
-                <small>{n.label}</small>
-                <b>
-                  {fmt(Number((nutrition as any)?.[n.key] || 0))}
-                  <i>{n.unit}</i>
-                </b>
-              </div>
-            ))}
-          </div>
-          <p className="dish-nutri-note">
-            {isServerNutrition
-              ? "이번 식단에 실제로 쓰인 재료·양 기준으로 계산했어요."
-              : "표준 1인분 기준 예시값이에요."}
-          </p>
-          {displaySteps.length > 0 && (
-            <div className="tts-row right">
-              <button
-                className="tts-button"
-                onClick={() => {
-                  setVoiceStep(0);
-                  speech.speak(`${menuName} 조리 순서입니다. 1번. ${displaySteps[0]}`);
-                }}
-              >
-                <SpeakerIcon />
-                {" 음성 안내 받기"}
-              </button>
-            </div>
-          )}
-          {/* 음성 안내 팝업 — 조리 단계를 하나씩 읽어준다 */}
-          {voiceStep >= 0 && (
-            <div
-              className="modal-bg"
-              onClick={() => {
-                speech.stop();
-                setVoiceStep(-1);
-              }}
-            >
-              <div className="modal voice" onClick={(e) => e.stopPropagation()}>
-                <div className="voice-head">
-                  <span className="voice-count">
-                    {voiceStep + 1} / {displaySteps.length}
-                  </span>
-                  <button
-                    className="voice-close"
-                    aria-label="닫기"
-                    onClick={() => {
-                      speech.stop();
-                      setVoiceStep(-1);
-                    }}
-                  >
-                    ✕
-                  </button>
-                </div>
-                <p className="voice-menu">{menuName}</p>
-                <div className="voice-body">
-                  <span className="voice-num">{voiceStep + 1}</span>
-                  <p>{displaySteps[voiceStep]}</p>
-                </div>
-                <div className="ask-actions">
-                  <button
-                    className="ask-no"
-                    onClick={() =>
-                      speech.speak(
-                        `${voiceStep + 1}번. ${displaySteps[voiceStep]}`,
-                      )
-                    }
-                  >
-                    {speech.speaking ? "다시 듣기" : "다시 듣기"}
-                  </button>
-                  {voiceStep < displaySteps.length - 1 ? (
-                    <button
-                      className="ask-yes"
-                      onClick={() => {
-                        const next = voiceStep + 1;
-                        setVoiceStep(next);
-                        speech.speak(`${next + 1}번. ${displaySteps[next]}`);
-                      }}
-                    >
-                      다음 →
-                    </button>
-                  ) : (
-                    <button
-                      className="ask-yes"
-                      onClick={() => {
-                        speech.stop();
-                        setVoiceStep(-1);
-                      }}
-                    >
-                      완료
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-    </>
-  );
-}
-// 메뉴 목록 + 고른 메뉴의 레시피를 '같은 화면에서' 펼쳐 보여준다 (화면 이동 없음).
-function RecipeList({
-  selected,
-  onSelect,
-}: {
-  selected: string;
-  onSelect: (n: string) => void;
-}) {
-  const { plan } = useApp();
-  return (
-    <>
-      <h2 className="section-title tight">식단 메뉴</h2>
-      <p className="sub small">
-        메뉴를 선택하면 재료와 조리과정을 확인할 수 있어요.
-      </p>
-      <div className="recipe-menu-list">
-        {plan.menus.map((n, i) => {
-          const open = n === selected;
-          return (
-            <div key={n}>
-              <button
-                className={open ? "recipe-menu-row active" : "recipe-menu-row"}
-                onClick={() => onSelect(open ? "" : n)}
-                aria-expanded={open}
-              >
-                <span className="rm-num">{i + 1}</span>
-                <span className="rm-txt">
-                  <b>{n}</b>
-                  <small>{roleLong(i)}</small>
-                </span>
-                <i className={open ? "rm-caret open" : "rm-caret"}>›</i>
-              </button>
-              {open && (
-                <section className="recipe-inline">
-                  <RecipeBody menuName={n} />
-                </section>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </>
-  );
-}
 function Recipe() {
   const nav = useNavigate();
   const { name = "" } = useParams();
@@ -1643,96 +948,6 @@ function Recipe() {
           onConfirm={saveWithSlot}
         />
       )}
-    </Shell>
-  );
-}
-function DayPlan() {
-  const nav = useNavigate();
-  const { profile } = useApp();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [data, setData] = useState<any>(null);
-  useEffect(() => {
-    let live = true;
-    setLoading(true);
-    setError("");
-    const body: any = { weight: Number(profile.weight) || 60 };
-    if (profile.height) {
-      body.height = Number(profile.height);
-      body.sex = profile.gender === "남성" ? "남" : "여";
-    }
-    generateDayPlan(body)
-      .then((d) => live && setData(d))
-      .catch(() => live && setError("서버에 연결하지 못했어요. 백엔드가 켜져 있는지 확인해주세요."))
-      .finally(() => {
-        if (live) setLoading(false);
-      });
-    return () => {
-      live = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  return (
-    <Shell header={false}>
-      <BackHeader title="하루 식단" />
-      <p className="eyebrow">아침 · 점심 · 저녁</p>
-      <h1>
-        하루치 식단을
-        <br />
-        한 번에 만들었어요.
-      </h1>
-      <p className="sub">
-        끼니마다 앞서 먹은 양을 반영해서, 하루 전체 영양 총량이 기준 안에
-        들어오도록 이어서 계산해요.
-      </p>
-      {loading && (
-        <div className="loading-page">
-          <div className="loader-plate">
-            <span className="loader-emoji">🍲</span>
-            <div className="orbit" />
-          </div>
-          <p className="loading-message">
-            아침 · 점심 · 저녁을 순서대로 계산하고 있어요
-          </p>
-          <p className="loading-hint">세 끼를 이어서 계산하느라 평소보다 오래 걸려요.</p>
-        </div>
-      )}
-      {!loading && error && (
-        <div className="warning-box">
-          <b>{error}</b>
-        </div>
-      )}
-      {!loading && data && (
-        <>
-          {data.meals.map((m: any, i: number) => (
-            <section key={i} className="change-section">
-              <div className="change-heading">
-                <span>{m.label?.slice(0, 1) || i + 1}</span>
-                <div>
-                  <b>{m.label}</b>
-                  <small>{m.meal?.join(" · ")}</small>
-                </div>
-              </div>
-              <div className="meal-list">
-                {(m.meal || []).map((name: string, j: number) => (
-                  <MealListRow
-                    key={name}
-                    name={name}
-                    role={labels[j] || "구성"}
-                    onClick={() => nav(`/recipe/${encodeURIComponent(name)}`)}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
-          <h2 className="section-title">하루 총 영양</h2>
-          <Nutrients
-            values={data.day_nutrition}
-            targets={data.day_targets}
-          />
-        </>
-      )}
-      <Button onClick={() => nav("/home")}>홈으로</Button>
     </Shell>
   );
 }

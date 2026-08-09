@@ -4,6 +4,42 @@
 
 ---
 
+## v19 업데이트 — App.tsx 구조 정리 3차-c1: `pages/meal/` 1부 (Home, DayPlan)
+
+3차(가장 위험도 높은 단계)를 통째로 옮기지 않고, 사용자 제안대로 더 잘게
+나눴다: c1(독립적인 화면) → c2(생성 workflow, 한 흐름으로 검증) →
+c3(recipe/PDF). 이번은 c1.
+
+### 새로 생긴 파일
+- `pages/meal/HomePage.tsx` — 홈(음식/재료 검색, 랜덤 추천)
+- `pages/meal/DayPlanPage.tsx` — 하루 식단
+- `components/meal/MealListRow.tsx`, `MealSlotDialog.tsx`, `RecipeBody.tsx`
+  (`toSteps` 헬퍼 포함), `RecipeList.tsx` — Home/DayPlan 자체보다는
+  FinalMeal · Recipe · DayPlan이 공통으로 쓰는 조각이라 먼저 공용
+  컴포넌트로 뺐다 (c2/c3에서 그 페이지들을 옮길 때 재사용)
+- `hooks/useSpeech.ts` — 음성 안내 훅. RecipeBody 안에서만 쓰여서 함께 이동
+
+### 검증
+- ✅ `npx tsc -b --force`(캐시 무시) 통과, `npm run build` 통과
+- ✅ 백엔드 pytest 37개 통과(무변경)
+- ✅ 로컬 백엔드+프론트 실제 클릭: 홈(음식 검색 → 메뉴 선택 → 실제 `/generate`
+  호출로 식단 생성까지, 아직 App.tsx에 남아있는 Generating/MealResult와의
+  연결도 확인) → 하루 식단(`/generate_day` 호출, 아침/점심/저녁 3끼 +
+  하루 총 영양 `Nutrients` 정상 표시)
+- ⚠️ 검증 중 `/generate_day`가 한 번 TF GRU 레이어 오류(`GRUCell` 객체에
+  `kernel` 속성 없음)로 실패하는 걸 발견했다. 재시도하니 정상 동작해서
+  로컬 TF 모델 첫 추론 시의 일시적 레이스로 보이며, 프론트 코드(로딩→에러
+  처리)는 그대로 옮긴 것이라 이번 리팩터링과는 무관 — 백엔드 쪽 이슈라
+  별도로 살펴봐야 한다.
+
+App.tsx: 1,906줄 → 1,121줄
+
+다음은 c2(`Generating` → `MealResult` → `Analysis` → `Adjusting` →
+`Comparison` → `FinalMeal`, 한 흐름으로 같이 검증), 그다음 c3(`Recipe`,
+`PdfPreview`, TTS 클릭 확인까지).
+
+---
+
 ## v18 업데이트 — App.tsx 구조 정리 3차-b: `pages/account/` 분리
 
 3단계 리팩터링 계획 중 3단계, 두 번째 묶음. 마이페이지 쪽 화면을 뺐다.
