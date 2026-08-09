@@ -93,6 +93,9 @@ function App() {
   >("menu");
   const [apiResult, setApiResult] = useState<ApiResult | null>(null);
   const [usingFallback, setUsingFallback] = useState(false);
+  const [dishSteps, setDishStepsState] = useState<Record<string, string[]>>({});
+  const setDishSteps = (menu: string, steps: string[]) =>
+    setDishStepsState((prev) => ({ ...prev, [menu]: steps }));
   const value = useMemo(
     () => ({
       profile,
@@ -107,8 +110,10 @@ function App() {
       setApiResult,
       usingFallback,
       setUsingFallback,
+      dishSteps,
+      setDishSteps,
     }),
-    [profile, plan, query, searchMode, apiResult, usingFallback],
+    [profile, plan, query, searchMode, apiResult, usingFallback, dishSteps],
   );
   return (
     <AppContext.Provider value={value}>

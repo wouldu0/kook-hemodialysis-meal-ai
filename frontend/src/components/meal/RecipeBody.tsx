@@ -9,7 +9,8 @@ import { SpeakerIcon } from "../icons";
 // 서버 /recipe의 steps는 배열이 아니라 '여러 줄 문자열'로 올 수 있다
 // (recipe_editor_FOOK.edit_recipe가 LLM 응답 텍스트를 그대로 반환한다).
 // 어떤 형태로 와도 화면이 깨지지 않게 문자열 배열로 맞춰준다.
-function toSteps(v: unknown): string[] {
+// PdfPreviewPage도 같은 응답 형태를 다뤄야 해서 이 파서를 그대로 가져다 쓴다.
+export function toSteps(v: unknown): string[] {
   if (Array.isArray(v)) return v.map((x) => String(x).trim()).filter(Boolean);
   if (typeof v === "string")
     return v
@@ -25,7 +26,7 @@ function toSteps(v: unknown): string[] {
 // 레시피 본문(재료 · 조리과정 · 영양성분 · 음성안내).
 // 목록에서 음식을 고르면 화면을 옮기지 않고 이 컴포넌트만 그 자리에서 펼친다.
 export function RecipeBody({ menuName }: { menuName: string }) {
-  const { apiResult } = useApp();
+  const { apiResult, setDishSteps } = useApp();
   // 서버가 이 끼를 생성하며 실제로 계산한 재료(dish_ingredients)를 최우선으로 쓴다.
   // 재료 교체로 이름이 바뀐 메뉴는 recipe_source에 원래 이름이 있어 조리법은 원본 기준 조회.
   const serverIngredients: [string, number][] | undefined =
@@ -59,7 +60,12 @@ export function RecipeBody({ menuName }: { menuName: string }) {
       .then((d) => {
         if (!live) return;
         if (d.error) setRecipeError(d.error);
-        else setSteps(toSteps(d.steps));
+        else {
+          const parsed = toSteps(d.steps);
+          setSteps(parsed);
+          // PDF 미리보기가 이 메뉴를 다시 /recipe로 불러오지 않고 재사용하도록 캐싱.
+          setDishSteps(menuName, parsed);
+        }
       })
       .catch(() => {
         if (live) setRecipeError("조리법을 불러오지 못했어요.");

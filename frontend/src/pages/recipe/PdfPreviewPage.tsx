@@ -1,11 +1,12 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BackHeader } from "../../components/layout/BackHeader";
 import { Button } from "../../components/layout/Button";
 import { Shell } from "../../components/layout/Shell";
 import { Logo } from "../../components/Logo";
+import { toSteps } from "../../components/meal/RecipeBody";
 import { useApp } from "../../hooks/useApp";
-import { currentUser, saveEverywhere } from "../../services/api";
+import { currentUser, generateRecipe, saveEverywhere } from "../../services/api";
 import { labels, menuMap, parseLocalIngredient } from "../../utils/menu";
 import {
   adjustedNutrition,
@@ -19,9 +20,43 @@ import {
 
 export function PdfPreviewPage() {
   const nav = useNavigate();
-  const { plan, apiResult } = useApp();
+  const { plan, apiResult, dishSteps, setDishSteps } = useApp();
   const ref = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(false);
+  // PDF에 재구성 후(=조정된 재료 기준) 조리법이 들어가도록, 아직 안 불러온 메뉴만
+  // /recipe로 마저 가져온다. 레시피 상세 화면에서 이미 펼쳐본 메뉴는 dishSteps에
+  // 캐싱돼 있어 다시 부르지 않는다. 다 받기 전까지는 다운로드를 막는다.
+  const [stepsLoading, setStepsLoading] = useState(true);
+  useEffect(() => {
+    let live = true;
+    const missing = plan.menus.filter((name) => {
+      if (dishSteps[name]) return false;
+      const ings = apiResult?.dish_ingredients?.[name];
+      return !!(ings && ings.length); // 조정된 재료가 있어야 재구성 레시피를 요청할 의미가 있다
+    });
+    if (!missing.length) {
+      setStepsLoading(false);
+      return;
+    }
+    setStepsLoading(true);
+    Promise.all(
+      missing.map((name) =>
+        generateRecipe({
+          menu: name,
+          ingredients: apiResult!.dish_ingredients![name],
+          source: apiResult?.recipe_source?.[name],
+        })
+          .then((d) => {
+            if (live && !d.error) setDishSteps(name, toSteps(d.steps));
+          })
+          .catch(() => {}), // 실패한 메뉴는 그대로 로컬/안내문구 폴백으로 남는다
+      ),
+    ).finally(() => live && setStepsLoading(false));
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // 서버가 실제로 계산한 값이 있으면 그걸 쓰고, 없을 때만(오프라인) 폴백 계산을 쓴다.
   const values =
     apiResult?.nutrition || adjustedNutrition(totalNutrition(plan));
@@ -81,8 +116,12 @@ export function PdfPreviewPage() {
           <Button secondary onClick={() => nav(-1)}>
             ‹ 이전으로
           </Button>
-          <Button onClick={download}>
-            {loading ? "PDF 생성 중..." : "PDF 다운로드"}
+          <Button onClick={download} disabled={stepsLoading || loading}>
+            {stepsLoading
+              ? "레시피 준비 중..."
+              : loading
+                ? "PDF 생성 중..."
+                : "PDF 다운로드"}
           </Button>
         </div>
       }
@@ -124,6 +163,15 @@ export function PdfPreviewPage() {
               const ingList = (
                 serverIngs || (m?.ingredients || []).map(parseLocalIngredient)
               ).map(([ing, amt]) => (amt > 0 ? `${ing} ${fmt2(amt)}g` : ing));
+              // 재구성 후 조리법(dishSteps)이 있으면 그걸 쓰고, 없으면 로컬 원본 → 안내문구 순으로.
+              // 로컬 데이터 중 steps가 빈 배열([])인 메뉴(예: 백미밥)도 있어 .length로 확인한다
+              // (빈 배열은 참으로 평가되므로 || 만으로는 안내문구로 안 넘어간다).
+              const stepList =
+                dishSteps[name]?.length
+                  ? dishSteps[name]
+                  : m?.steps?.length
+                    ? m.steps
+                    : ["레시피 상세 화면에서 AI 조리법을 확인하세요."];
               return (
                 <tr key={name}>
                   <th>{labels[i]}</th>
@@ -137,11 +185,7 @@ export function PdfPreviewPage() {
                   </td>
                   <td>
                     <ol>
-                      {(
-                        m?.steps || [
-                          "레시피 상세 화면에서 AI 조리법을 확인하세요.",
-                        ]
-                      ).map((x, j) => (
+                      {stepList.map((x, j) => (
                         <li key={j}>{x}</li>
                       ))}
                     </ol>

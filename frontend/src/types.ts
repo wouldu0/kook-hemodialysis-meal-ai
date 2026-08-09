@@ -113,4 +113,8 @@ export type AppState = {
   // 이때는 영양 판정 뱃지가 실제 개인 맞춤 계산이 아니라는 걸 화면에 계속 표시해야 한다.
   usingFallback: boolean;
   setUsingFallback: (v: boolean) => void;
+  // 메뉴별로 LLM이 재구성한 조리법(steps)을 캐싱해둔다. 레시피 상세 화면에서 한 번 펼쳐본
+  // 메뉴는 여기 남아있어서, PDF 미리보기가 같은 메뉴를 또 /recipe로 불러오지 않고 재사용한다.
+  dishSteps: Record<string, string[]>;
+  setDishSteps: (menu: string, steps: string[]) => void;
 };
