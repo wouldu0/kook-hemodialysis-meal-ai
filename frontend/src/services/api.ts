@@ -1,6 +1,6 @@
 // 백엔드 통신 + 로컬/서버 동기화 저장소. App.tsx의 화면 컴포넌트들은 이 모듈의
 // 함수만 통해서 서버와 이야기한다(직접 fetch를 새로 쓰지 않는다).
-import type { SavedItem, SavedUser } from "../types";
+import type { ApiResult, SavedItem, SavedUser } from "../types";
 
 export const storage = {
   get<T>(key: string, fallback: T): T {
@@ -15,63 +15,12 @@ export const storage = {
   },
 };
 
-// 백엔드 주소. 평소에는 빌드 시점에 박힌 값(.env.production)을 쓴다.
-//
-// 비상용 우회로: 배포된 백엔드가 죽었을 때 주소 뒤에 ?api=... 를 붙이면
-// 그 백엔드로 갈아탄다. 한 번 붙이면 브라우저에 기억되므로 이후에는 그냥 열면 된다.
-//   예) https://kook-omega.vercel.app/?api=https://abc-def.trycloudflare.com
-// 원래대로 되돌리려면  ?api=reset  으로 열면 된다.
-//
-// ⚠️ 보안: 이 값을 그대로 신뢰하면 안 된다 — apiFetch()가 로그인 토큰을
-// `Authorization: Bearer ...`로 이 주소에 보내므로, 누군가 조작한 링크(?api=공격자서버)를
-// 열면 로그인 세션이 그쪽으로 새어나갈 수 있다. 그래서 세 겹으로 막는다:
-// (1) https만 허용 (2) 호스트가 실제로 쓰는 호스팅 제공자 도메인(Render·Cloudflare
-// Quick Tunnel)에 속할 때만 허용 — 완전히 임의의 공격자 도메인은 여기서 막힌다.
-// (3) 그래도 실제로 바뀔 때만 confirm()으로 주소를 보여주고 동의를 받은 뒤 저장한다.
-const ALLOWED_API_HOST_SUFFIXES = [".onrender.com", ".trycloudflare.com"];
-export function isValidApiOverride(raw: string): string | null {
-  try {
-    const url = new URL(raw);
-    if (url.protocol !== "https:") return null;
-    const host = url.hostname.toLowerCase();
-    const allowed = ALLOWED_API_HOST_SUFFIXES.some(
-      (suffix) => host === suffix.slice(1) || host.endsWith(suffix),
-    );
-    if (!allowed) return null;
-    return raw.replace(/\/+$/, "");
-  } catch {
-    return null;
-  }
-}
-
-export const API = (() => {
-  const fallback =
-    (import.meta as any).env.VITE_API_URL || "http://127.0.0.1:8000";
-  try {
-    const q = new URLSearchParams(location.search).get("api");
-    if (q === "reset") {
-      localStorage.removeItem("fook:api");
-      return fallback;
-    }
-    if (q) {
-      const url = isValidApiOverride(q);
-      const saved = localStorage.getItem("fook:api");
-      if (!url) return saved || fallback; // https가 아니면 그냥 무시
-      if (url === saved) return url; // 이미 동의하고 저장된 주소면 다시 안 물어봄
-      const ok = window.confirm(
-        `백엔드 서버 주소를 다음으로 바꿉니다:\n\n${url}\n\n` +
-          "이 주소를 신뢰할 수 있는 경우에만 확인을 누르세요. " +
-          "로그인 상태라면 인증 정보가 이 서버로 전송됩니다.",
-      );
-      if (!ok) return saved || fallback;
-      localStorage.setItem("fook:api", url);
-      return url;
-    }
-    return localStorage.getItem("fook:api") || fallback;
-  } catch {
-    return fallback;
-  }
-})();
+// 백엔드 주소. 빌드 시점에 박힌 값(.env.production의 VITE_API_URL)을 그대로 쓴다.
+// (예전엔 ?api=로 배포 중에 다른 백엔드로 갈아탈 수 있는 비상 우회 기능이 있었지만,
+// 로그인 토큰을 그 주소로 보내는 구조 자체가 위험 요소라 판단해 제거했다. 백엔드
+// 주소를 바꿔야 하면 VITE_API_URL을 바꾸고 다시 배포한다.)
+export const API =
+  (import.meta as any).env.VITE_API_URL || "http://127.0.0.1:8000";
 
 export const currentUser = () => storage.get<SavedUser | null>("fook:user", null);
 export const authToken = () => localStorage.getItem("fook:token") || "";
@@ -213,4 +162,108 @@ export async function deleteEverywhere(key: string, id: string) {
   } catch {
     // 무시
   }
+}
+
+// ────────────────────────── 엔드포인트별 함수 ──────────────────────────
+// 화면 컴포넌트는 아래 함수만 부르면 된다 — URL·타임아웃·헤더·에러 처리는
+// 전부 apiFetch()가 책임진다.
+
+export function warmupBackend() {
+  // 무료 호스팅은 한동안 요청이 없으면 잠든다. 온보딩을 보는 동안 미리 깨워둔다.
+  return apiFetch("/health").catch(() => {});
+}
+
+export function getMenus(): Promise<{ menus: string[] }> {
+  return apiFetch("/menus");
+}
+
+export function getIngredients(): Promise<{ ingredients: string[] }> {
+  return apiFetch("/ingredients");
+}
+
+export function getMenusByIngredient(q: string): Promise<{ menus: string[] }> {
+  return apiFetch(`/menus_by_ingredient?q=${encodeURIComponent(q)}`);
+}
+
+export function generateMeal(body: Record<string, unknown>): Promise<ApiResult> {
+  // 조건에 맞는 조합을 찾을 때까지 재시도하는 구조라 원래 느리다.
+  return apiFetch("/generate", { method: "POST", body: JSON.stringify(body), timeoutMs: 60000 });
+}
+
+export function generateDayPlan(body: Record<string, unknown>): Promise<any> {
+  // 세 끼를 이어서 계산하므로 한 끼 생성보다 훨씬 오래 걸린다.
+  return apiFetch("/generate_day", { method: "POST", body: JSON.stringify(body), timeoutMs: 90000 });
+}
+
+export function generateRecipe(payload: {
+  menu: string;
+  ingredients: [string, number][];
+  source?: string;
+}): Promise<{ menu: string; steps?: string; error?: string }> {
+  return apiFetch("/recipe", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function textToSpeech(text: string): Promise<Blob> {
+  return apiFetch("/tts", {
+    method: "POST",
+    body: JSON.stringify({ text }),
+    responseType: "blob",
+  });
+}
+
+export function getPotassiumTips(): Promise<{
+  tips: { category: string; steps: { title: string; detail: string }[] }[];
+}> {
+  return apiFetch("/veg_potassium_tips");
+}
+
+export function login(username: string, password: string) {
+  return apiFetch("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ username, password }),
+  });
+}
+
+export function signup(name: string, username: string, password: string) {
+  return apiFetch("/auth/signup", {
+    method: "POST",
+    body: JSON.stringify({ name, username, password }),
+  });
+}
+
+export function findId(name: string, birthdate: string): Promise<{ usernames: string[] }> {
+  return apiFetch("/auth/find-id", {
+    method: "POST",
+    body: JSON.stringify({ name, birthdate }),
+  });
+}
+
+export function resetPassword(
+  username: string,
+  name: string,
+  birthdate: string,
+  newPassword: string,
+) {
+  return apiFetch("/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ username, name, birthdate, new_password: newPassword }),
+  });
+}
+
+export function updateProfile(payload: {
+  gender: string;
+  birthdate: string;
+  height: number;
+  weight: number;
+  dialysis: string;
+}) {
+  return apiFetch("/me/profile", { method: "PUT", body: JSON.stringify(payload) });
+}
+
+export function getMe(): Promise<{ user: any; profile: any }> {
+  return apiFetch("/me");
+}
+
+export function logout() {
+  return apiFetch("/auth/logout", { method: "POST" });
 }

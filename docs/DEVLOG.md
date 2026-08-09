@@ -4,6 +4,33 @@
 
 ---
 
+## v15 업데이트 — App.tsx 구조 정리 1차: API 서비스 함수화 + `?api=` 완전 제거
+
+App.tsx(3,700여 줄)를 pages/components/services/hooks로 나누는 작업의 1단계.
+가장 위험도가 낮고 효과가 큰 "API 계층 정리"부터 진행했다.
+
+### 1) `services/api.ts`에 엔드포인트별 함수 추가
+- `getMenus`, `getIngredients`, `getMenusByIngredient`, `generateMeal`,
+  `generateDayPlan`, `generateRecipe`, `textToSpeech`, `getPotassiumTips`,
+  `login`, `signup`, `findId`, `resetPassword`, `updateProfile`, `getMe`,
+  `logout`, `warmupBackend` — App.tsx의 15개 `apiFetch()` 직접 호출을 전부
+  이름 있는 함수 호출로 교체했다. 화면은 이제 `await generateMeal(body)`처럼
+  "뭘 부르는지"만 알면 되고, URL·타임아웃·헤더는 services/api.ts 안에 있다.
+
+### 2) `?api=` 백엔드 우회 기능 자체를 제거
+- v13~v14에서 https-only → 도메인 allowlist → confirm() 동의까지 세 겹으로
+  막았지만, "그래도 승인하면 결국 인증 토큰이 임의로 지정한 주소로 간다"는
+  구조적 위험은 남아있었다. 포트폴리오 서비스에 굳이 필요한 기능이 아니라고
+  판단해 기능 자체를 없앴다 — 이제 `API`는 그냥 `VITE_API_URL`(없으면 로컬
+  기본값) 고정이다. 백엔드 주소를 바꾸려면 환경변수를 바꾸고 재배포한다.
+
+### 검증
+- ✅ `npm run build`(tsc+vite) 통과, 백엔드 pytest 37개 통과(무변경)
+- ✅ 로컬 백엔드+프론트로 실제 클릭: 메뉴 검색 → 메뉴 지정 생성(`generateMeal`)
+  → 영양 판정까지 실제 서버 응답(예시 데이터 아님, 초과/적절 실측치)으로 확인
+
+---
+
 ## v14 업데이트 — v13 리뷰 후속: `?api=` 도메인 allowlist, fetch 전량 일원화
 
 v13 반영 후 같은 리뷰어가 다시 대조 검증한 결과, "부분 수정"으로 남아있던 2건.

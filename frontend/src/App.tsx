@@ -24,14 +24,29 @@ import type {
 } from "./types";
 import {
   addSaved,
-  apiFetch,
   authToken,
   currentUser,
   deleteEverywhere,
+  findId,
+  generateDayPlan,
+  generateMeal,
+  generateRecipe,
+  getMe,
+  getMenus,
+  getMenusByIngredient,
+  getIngredients,
+  getPotassiumTips,
   loadEverywhere,
+  login,
+  logout,
+  resetPassword,
   saveEverywhere,
   saveSession,
+  signup,
   storage,
+  textToSpeech,
+  updateProfile,
+  warmupBackend,
 } from "./services/api";
 import { AppContext, useApp } from "./hooks/useApp";
 
@@ -334,11 +349,7 @@ function useSpeech() {
     }
     setSpeaking(true);
     try {
-      const blob = await apiFetch("/tts", {
-        method: "POST",
-        body: JSON.stringify({ text: clean }),
-        responseType: "blob",
-      });
+      const blob = await textToSpeech(clean);
       const audio = new Audio(URL.createObjectURL(blob));
       audioRef.current = audio;
       audio.onended = () => setSpeaking(false);
@@ -487,7 +498,7 @@ function App() {
   // 무료 호스팅 백엔드는 한동안 요청이 없으면 잠든다. 사용자가 소개 화면을
   // 넘기는 동안 미리 깨워두면, 회원가입/로그인 차례에는 이미 준비된 상태가 된다.
   useEffect(() => {
-    apiFetch("/health").catch(() => {});
+    warmupBackend();
   }, []);
   const [profile, setProfile] = useState(initialProfile);
   const [plan, setPlan] = useState<Plan>(fallbackPlan);
@@ -1056,10 +1067,7 @@ function Login() {
     setBusy(true);
     setError("");
     try {
-      const d = await apiFetch("/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ username: username.trim(), password }),
-      });
+      const d = await login(username.trim(), password);
       saveSession(d);
       nav("/home");
     } catch (e: any) {
@@ -1204,10 +1212,7 @@ function FindId() {
     setError("");
     setFound(null);
     try {
-      const d = await apiFetch("/auth/find-id", {
-        method: "POST",
-        body: JSON.stringify({ name: name.trim(), birthdate }),
-      });
+      const d = await findId(name.trim(), birthdate);
       setFound(d.usernames || []);
     } catch (e: any) {
       setError(e.message);
@@ -1305,15 +1310,7 @@ function FindPassword() {
     setBusy(true);
     setError("");
     try {
-      await apiFetch("/auth/reset-password", {
-        method: "POST",
-        body: JSON.stringify({
-          username: username.trim(),
-          name: name.trim(),
-          birthdate,
-          new_password: pw,
-        }),
-      });
+      await resetPassword(username.trim(), name.trim(), birthdate, pw);
       setDone(true);
     } catch (e: any) {
       setError(e.message);
@@ -1442,14 +1439,7 @@ function Signup() {
     setBusy(true);
     setError("");
     try {
-      const d = await apiFetch("/auth/signup", {
-        method: "POST",
-        body: JSON.stringify({
-          name: name.trim(),
-          username: username.trim(),
-          password,
-        }),
-      });
+      const d = await signup(name.trim(), username.trim(), password);
       saveSession(d);
       // 회원가입 직후엔 반드시 프로필(신체정보) 입력 화면으로 넘어간다.
       nav("/profile");
@@ -1570,15 +1560,12 @@ function ProfileSetup() {
     setError("");
     try {
       if (authToken())
-        await apiFetch("/me/profile", {
-          method: "PUT",
-          body: JSON.stringify({
-            gender: draft.gender,
-            birthdate: draft.birthdate,
-            height: Number(draft.height),
-            weight: Number(draft.weight),
-            dialysis: draft.dialysis,
-          }),
+        await updateProfile({
+          gender: draft.gender,
+          birthdate: draft.birthdate,
+          height: Number(draft.height),
+          weight: Number(draft.weight),
+          dialysis: draft.dialysis,
         });
       const withAge = { ...draft, age: String(computedAge ?? draft.age) };
       setProfile(withAge);
@@ -1723,7 +1710,7 @@ function Home() {
   const [randomAsk, setRandomAsk] = useState(false);
   const user = currentUser();
   useEffect(() => {
-    Promise.all([apiFetch("/menus"), apiFetch("/ingredients")])
+    Promise.all([getMenus(), getIngredients()])
       .then(([m, i]) => {
         setMenuList(m.menus || []);
         setIngList(i.ingredients || []);
@@ -1755,7 +1742,7 @@ function Home() {
     setIngQuery(ing);
     setIngMenus(null);
     setIngLoading(true);
-    apiFetch(`/menus_by_ingredient?q=${encodeURIComponent(ing)}`)
+    getMenusByIngredient(ing)
       .then((d) => setIngMenus(d.menus || []))
       .catch(() => setIngMenus([]))
       .finally(() => setIngLoading(false));
@@ -2035,11 +2022,7 @@ function Generating() {
       if (searchMode === "ingredient" && query.trim())
         body.ingredient = query.trim();
       try {
-        const d = await apiFetch("/generate", {
-          method: "POST",
-          body: JSON.stringify(body),
-          timeoutMs: 60000,
-        });
+        const d = await generateMeal(body);
         if (!live) return;
         setS(4);
         setUsingFallback(false);
@@ -2863,13 +2846,10 @@ function RecipeBody({ menuName }: { menuName: string }) {
     if (!serverIngredients || !serverIngredients.length) return;
     let live = true;
     setLoadingRecipe(true);
-    apiFetch("/recipe", {
-      method: "POST",
-      body: JSON.stringify({
-        menu: menuName,
-        ingredients: serverIngredients,
-        source: recipeSourceName,
-      }),
+    generateRecipe({
+      menu: menuName,
+      ingredients: serverIngredients,
+      source: recipeSourceName,
     })
       .then((d) => {
         if (!live) return;
@@ -3179,11 +3159,7 @@ function DayPlan() {
       body.height = Number(profile.height);
       body.sex = profile.gender === "남성" ? "남" : "여";
     }
-    apiFetch("/generate_day", {
-      method: "POST",
-      body: JSON.stringify(body),
-      timeoutMs: 90000,
-    })
+    generateDayPlan(body)
       .then((d) => live && setData(d))
       .catch(() => live && setError("서버에 연결하지 못했어요. 백엔드가 켜져 있는지 확인해주세요."))
       .finally(() => {
@@ -3265,7 +3241,7 @@ function Tips() {
   >(null);
   const [error, setError] = useState("");
   useEffect(() => {
-    apiFetch("/veg_potassium_tips")
+    getPotassiumTips()
       .then((d) => setTips(d.tips || []))
       .catch(() => setError("팁을 불러오지 못했어요."));
   }, []);
@@ -3510,7 +3486,7 @@ function Account() {
   // 계정 화면에 들어올 때마다 서버의 최신 프로필을 한 번 불러와 화면에 반영한다.
   // (다른 기기에서 수정했거나, 세션이 오래된 경우에도 항상 최신 값을 보여주기 위함)
   useEffect(() => {
-    apiFetch("/me")
+    getMe()
       .then((d) => {
         if (!d?.profile) return;
         const p = d.profile;
@@ -3528,9 +3504,9 @@ function Account() {
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const logout = async () => {
+  const handleLogout = async () => {
     try {
-      await apiFetch("/auth/logout", { method: "POST" });
+      await logout();
     } catch {}
     localStorage.removeItem("fook:user");
     localStorage.removeItem("fook:token");
@@ -3583,7 +3559,7 @@ function Account() {
           <i>›</i>
         </button>
       </div>
-      <button className="logout" onClick={logout}>
+      <button className="logout" onClick={handleLogout}>
         로그아웃
       </button>
     </Shell>
