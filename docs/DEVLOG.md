@@ -31,6 +31,20 @@
 
 App.tsx: 3,753줄 → 3,185줄
 
+**3차(페이지 컴포넌트를 `pages/`로 분리)는 의도적으로 이번 세션에 포함하지 않았다.**
+이 지점을 안정 버전으로 태그해뒀다(`v16-appjs-refactor-stage2`). 3차를 시작할 때는:
+
+1. 가장 독립적인 것부터: `pages/auth/`(LoginPage, FindIdPage, FindPasswordPage,
+   SignupPage)
+2. 그다음: `pages/account/`(AccountPage, LibraryPage, TipsPage)
+3. 마지막(가장 위험도 높음 — 서로 상태 의존이 큼): `pages/meal/`(HomePage,
+   GeneratingPage, AnalysisPage, AdjustingPage, ComparisonPage, FinalMealPage,
+   DayPlanPage). `Home → Generating → Analysis → Adjusting → Comparison → Final`
+   흐름은 한 번에 같이 검증해야 한다.
+
+목표는 `App.tsx`를 억지로 100줄까지 줄이는 게 아니라 500~1,000줄 정도로 자연스럽게
+줄이는 것 — 작은 컴포넌트까지 전부 파일로 쪼개면 오히려 찾아다니기 힘들어진다.
+
 ---
 
 ## v15 업데이트 — App.tsx 구조 정리 1차: API 서비스 함수화 + `?api=` 완전 제거
