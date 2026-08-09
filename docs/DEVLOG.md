@@ -4,6 +4,39 @@
 
 ---
 
+## v17 업데이트 — App.tsx 구조 정리 3차-a: `pages/auth/` + `pages/onboarding/` 분리
+
+3단계 리팩터링 계획 중 3단계, 그중 가장 독립적인 auth/onboarding 화면부터 뺐다.
+
+### 새로 생긴 파일
+- `pages/onboarding/OnboardingPage.tsx` — 스플래시(`Splash`) + 온보딩 5단계
+  (`slides`, `PREVIEW_MENUS`, `ONBOARDING_IMAGE`, `OnboardingVisual`)
+- `pages/auth/LoginPage.tsx` — 로그인 + 체험(게스트) 진입
+- `pages/auth/FindIdPage.tsx`, `pages/auth/FindPasswordPage.tsx` — 아이디/비밀번호 찾기
+- `pages/auth/SignupPage.tsx` — 회원가입 1단계(아이디)
+- `pages/auth/ProfileSetupPage.tsx` — 회원가입 2단계(프로필 입력)
+
+각 페이지는 자신이 쓰는 `services/api`, `hooks/useApp`, `components/*`, `utils/*`를
+직접 import한다. `App.tsx`는 라우트 등록만 담당.
+
+### 죽은 코드 정리
+- `Trust`, `OnboardingShot` — 사용처 0곳 확인 후 이동 없이 삭제.
+
+### 검증
+- ✅ `npx tsc -b --force`(캐시 무시) 통과, `npm run build` 통과
+- ✅ 백엔드 pytest 37개 통과(무변경)
+- ✅ 로컬 백엔드+프론트 실제 클릭: 스플래시 → 온보딩 1~5단계 → 로그인 화면 →
+  아이디 찾기 → 비밀번호 찾기 → 회원가입(1단계 제출까지, DB 미연결 환경이라
+  서버 오류 메시지까지 정상 표시되는 것 확인) → 체험하기(가상 프로필 모달 →
+  체험 진행 → 예시 식단 결과 화면 정상 진입) → 프로필 입력 화면(2/2단계) 확인
+
+App.tsx: 3,185줄 → 2,208줄
+
+다음은 3b(`pages/account/`), 그다음 3c(`pages/meal/` + `pages/recipe/`, 상태 의존이
+가장 큰 마지막 단계).
+
+---
+
 ## v16 업데이트 — App.tsx 구조 정리 2차: 공용 컴포넌트/유틸 추출
 
 3단계 리팩터링 계획 중 2단계. 여러 화면이 함께 쓰는, 상태·API 의존이 적은 조각부터 뺐다.
