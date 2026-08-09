@@ -48,10 +48,10 @@ const slides = [
 ] as const;
 
 // 첫 화면: "오늘 뭐 해 먹지?" 스플래시. 시작하기를 누르면 온보딩 5단계로 들어간다.
+// "시작하기" 버튼은 항상 실제 DOM 버튼이다 — 그림에는 텍스트나 버튼을 굽지 않으므로,
+// 이미지를 새로 바꿔도 버튼 위치가 어긋날 일이 없다. 그림이 있을 때는 그림 하단부
+// 안쪽에 버튼을 얹고(.splash-cta), 그림이 없을 때만 Shell 하단 footer 버튼을 쓴다.
 function Splash({ onStart }: { onStart: () => void }) {
-  // 준비된 홈 이미지가 있으면 그 한 장을 화면 전체로 쓴다.
-  // 그림 속 '시작하기' 버튼은 일러스트 위에 겹쳐 그려져 있어 잘라낼 수 없으므로,
-  // 그 자리에 투명한 진짜 버튼을 겹쳐 둔다 (위치는 이미지에서 실측한 비율).
   const [shotFailed, setShotFailed] = useState(false);
   if (!shotFailed)
     return (
@@ -63,12 +63,9 @@ function Splash({ onStart }: { onStart: () => void }) {
               alt="오늘 뭐 해 먹지? 고민에 푹 빠질 땐 KOOK이 도와드립니다"
               onError={() => setShotFailed(true)}
             />
-            {/* 그림 속 '시작하기' 버튼 위에 겹치는 투명 버튼 */}
-            <button
-              className="splash-hit"
-              onClick={onStart}
-              aria-label="시작하기"
-            />
+            <button className="splash-cta" onClick={onStart}>
+              시작하기 <i className="btn-arrow">→</i>
+            </button>
           </div>
         </div>
       </Shell>
@@ -117,8 +114,9 @@ const PREVIEW_MENUS = [
   ["저염 배추김치", "반찬"],
 ] as const;
 
-// 온보딩 단계별 이미지. public/assets 에 파일이 있으면 그 이미지를 쓰고,
+// 온보딩 단계별 이미지(실제 앱 화면 캡처). public/assets 에 파일이 있으면 그 이미지를 쓰고,
 // 없으면(파일 미준비) 아래의 CSS 미리보기로 자동 대체된다.
+// 이미지에는 제목·n/5 배지를 굽지 않는다 — 화면 위쪽에 실시간 텍스트로 항상 얹는다.
 const ONBOARDING_IMAGE: Record<string, string> = {
   search: "/assets/onboarding-1.png",
   meal: "/assets/onboarding-2.png",
@@ -289,43 +287,41 @@ export function OnboardingPage() {
       nextLabel={last ? "시작" : "다음"}
     />
   );
-  // 단계 이미지가 준비돼 있으면 그 이미지 한 장이 곧 화면이다.
-  // (이미지 안에 제목과 1/5 배지가 이미 들어 있어서 화면 텍스트와 겹치지 않게 감춘다)
+  // 제목·건너뛰기·n/5 배지는 항상 실시간 텍스트로 그리고, 그 아래에 실제 화면
+  // 스크린샷(준비돼 있으면) 또는 CSS 미리보기를 채운다.
   const shot = ONBOARDING_IMAGE[s[3]];
+  const head = (
+    <>
+      <div className="onboarding-top">
+        <button className="skip" onClick={finish}>
+          건너뛰기
+        </button>
+        <span className="step-count">
+          {i + 1} / {slides.length}
+        </span>
+      </div>
+      <h1 className="onboarding-title">
+        <b>{s[0]}</b> {s[1]}
+      </h1>
+      <p className="sub center">{s[2]}</p>
+    </>
+  );
   return (
-    <Shell header={false} footer={footer} full={!!shot && !shotFailed}>
-      {shot && !shotFailed ? (
-        <div className="onboarding-page">
-          <img
-            src={shot}
-            alt={`${s[0]} ${s[1]} — ${s[2]}`}
-            onError={() => setShotFailed(true)}
-          />
-          {/* 이미지 화면에도 왼쪽 위에 로고를 얹고, 건너뛰기는 반대쪽으로 보낸다 */}
-          <span className="shot-brand" aria-hidden="true">
-            <Logo />
-          </span>
-          <button className="skip float right" onClick={finish}>
-            건너뛰기
-          </button>
+    <Shell header={false} footer={footer} full>
+      <div className="onboarding-page">
+        <div className="onboarding-head">{head}</div>
+        <div className="onboarding-photo">
+          {shot && !shotFailed ? (
+            <img
+              src={shot}
+              alt={`${s[0]} ${s[1]} — ${s[2]}`}
+              onError={() => setShotFailed(true)}
+            />
+          ) : (
+            <OnboardingVisual type={s[3]} />
+          )}
         </div>
-      ) : (
-        <>
-          <div className="onboarding-top">
-            <button className="skip" onClick={finish}>
-              건너뛰기
-            </button>
-            <span className="step-count">
-              {i + 1} / {slides.length}
-            </span>
-          </div>
-          <h1 className="onboarding-title">
-            <b>{s[0]}</b> {s[1]}
-          </h1>
-          <p className="sub center">{s[2]}</p>
-          <OnboardingVisual type={s[3]} />
-        </>
-      )}
+      </div>
     </Shell>
   );
 }

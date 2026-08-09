@@ -315,14 +315,6 @@
 .modal.ask p { font-size: var(--fs-xs); }
 .ask-actions button { font-size: var(--fs-sm); }
 
-/* 온보딩 단계 이미지 (public/assets/onboarding-1~5.png) */
-.onboarding-shot { margin: var(--sp-md) 0 0; }
-.onboarding-shot img {
-  display: block; width: 100%; height: auto;
-  border: 1px solid var(--line); border-radius: var(--rd-md);
-  background: #fff;
-}
-
 /* PDF 문서 폭을 넓혀 세로를 줄인다 (A4 비율 1.41에 가깝게 → 축소율이 줄어 글자가 커진다) */
 .pdf-page { min-width: 860px; }
 .meal-recipe-table th:nth-child(1) { width: 8%; }
@@ -331,33 +323,48 @@
 .meal-recipe-table th:nth-child(4) { width: 46%; }
 
 /* ============================================================================
-   v21 — 온보딩 단계 이미지를 화면 한 장으로 사용
-   이미지 안에 제목과 n/5 배지가 이미 들어 있어, 화면 텍스트는 감추고 이미지만 채운다.
-   하단의 이전 / 다음 버튼은 실제 동작하는 버튼이다.
+   온보딩 단계 화면 — 제목·건너뛰기·n/5 배지는 항상 실시간 텍스트(.onboarding-head)로
+   그리고, 그 아래(.onboarding-photo)에 실제 화면 스크린샷을 꽉 채운다.
+   이미지에는 어떤 텍스트도 굽지 않는다 — 이미지를 새로 바꿔도 배지·제목 위치가
+   절대 어긋나지 않는다(예전엔 이미지에 직접 그려 넣어 이미지마다 위치가 미묘하게
+   달랐다).
    ========================================================================== */
 .screen.screen-full { padding: 0; overflow: hidden; }
-.onboarding-page { position: relative; width: 100%; height: 100%; }
+.onboarding-page {
+  display: flex; flex-direction: column;
+  width: 100%; height: 100%;
+}
+.onboarding-head {
+  flex: 0 0 auto;
+  padding: var(--sp-lg) var(--sp-lg) var(--sp-md);
+  background: var(--cream, #fbfaf6);
+}
+.onboarding-photo {
+  flex: 1; min-height: 0;
+  position: relative;
+  /* 화면 배경과 스크린샷 배경이 둘 다 크림색이라 경계가 안 보이던 문제 —
+     테두리·둥근 모서리·그림자로 "이 안쪽은 실제 화면 캡처"라는 카드 경계를
+     만든다. 좌우·아래는 여백을 둬 페이지 배경이 비쳐 보이게 한다. */
+  padding: 0 var(--sp-lg) var(--sp-lg);
+  overflow: hidden;
+  background: var(--cream, #fbfaf6);
+}
 /* contain 이면 세로가 길어질수록 아래에 빈 띠가 남는다. cover 로 채우고
-   기준점을 위쪽에 두어, 잘리더라도 이미지 상단의 제목과 n/5 배지는 항상 보이게 한다. */
-.onboarding-page img {
+   기준점을 위쪽에 두어, 화면 상단(실제 앱의 헤더·내용 시작 지점)이 항상 보이게 한다. */
+.onboarding-photo img {
   display: block; width: 100%; height: 100%;
   object-fit: cover; object-position: top center;
-}
-.skip.float {
-  position: absolute; top: var(--sp-sm); left: var(--sp-sm);
-  padding: 6px 12px; border-radius: 999px;
-  background: rgba(255, 255, 255, .86); color: var(--muted);
-  font-size: var(--fs-xs); font-weight: 700;
+  border-radius: var(--rd-lg, 22px);
   border: 1px solid var(--line);
+  box-shadow: 0 14px 30px rgba(43, 54, 44, .14);
 }
+.onboarding-photo .visual-card { margin: 0; height: 100%; }
 
 /* ============================================================================
    v22 — 스플래시 이미지 · 체험 안내 팝업 · 저장 목적지 통일
    ========================================================================== */
-/* 스플래시: 시안 이미지를 손대지 않고 그대로 한 화면으로 쓴다.
-   그림 속 '시작하기' 버튼 위에 투명한 진짜 버튼만 겹쳐 눌리게 하고,
-   화면에 시각은 표시하지 않는다.
-   (위치 값은 이미지에서 픽셀 단위로 실측한 비율) */
+/* 스플래시: 일러스트 한 장을 화면 가득 보여준다. 그림에는 문구나 버튼을 굽지
+   않는다 — "시작하기"는 그림 위에 얹는 실제 버튼이다(.splash-cta, Splash 함수 참고). */
 .splash-shot {
   width: 100%; height: 100%;
   /* 줄어든 이미지 둘레를 채우는 색 — 그림 테두리에서 가장 많이 나온 색(실측) */
@@ -368,20 +375,15 @@
   container-type: size;
 }
 /* ── 스플래시 이미지 크기 ──────────────────────────────────────────────────
-   그림 속 문구가 이미지에 그려져 있어, 글씨를 줄이려면 이미지를 줄여야 한다.
-
    --splash-ar    이미지의 세로/가로 비율. 이미지를 교체하면 이 값만 실제 픽셀에
                   맞춰 고치면 되고, 아래 계산은 손댈 필요가 없다.
-                    현재 onboarding-home.png = 941 × 1672 → 1672/941 = 1.777
    --splash-scale 화면에 꽉 맞췄을 때 대비 배율. 1 = 잘림 없이 최대 크기,
-                  값을 낮출수록 그림(=글씨)이 작아지고 둘레 여백이 넓어진다.
+                  값을 낮출수록 그림이 작아지고 둘레 여백이 넓어진다.
                   여백은 .splash-shot 배경색으로 채워져 그림과 이어져 보인다.
 
-   폭은 '세로·가로 어느 쪽도 넘치지 않는 크기'(min)에 배율을 곱해 잡는다.
-   프레임이 이미지 상자와 정확히 일치하므로, 안에 겹쳐 둔 % 좌표(시작하기 버튼)는
-   배율과 무관하게 그림 위 같은 자리에 붙어 있는다. */
+   폭은 '세로·가로 어느 쪽도 넘치지 않는 크기'(min)에 배율을 곱해 잡는다. */
 .splash-frame {
-  --splash-ar: 2.108;   /* onboarding-home.png = 864 x 1821 */
+  --splash-ar: 2.167;   /* onboarding-home.png = 852 x 1846 */
   --splash-scale: 1;
   position: relative;
   flex: none;                        /* flex가 임의로 줄이지 못하게 */
@@ -397,22 +399,29 @@
 .splash-frame img {
   display: block;
   width: 100%; height: 100%;
-  object-fit: cover; object-position: bottom center;
+  object-fit: cover; object-position: center;
 }
 @supports not (width: 100cqh) {
   /* 컨테이너 크기 쿼리 미지원 브라우저: 확대 없이 폭에 맞춘다 */
   .splash-frame { width: 100%; }
 }
 
-/* 그림 속 버튼 위 투명 버튼 */
-.splash-hit {
+/* 그림 중앙 하단쪽에 얹는 실제 "시작하기" 버튼. 그림 속 특정 좌표를 실측해
+   맞춘 게 아니라 우리가 정한 위치라, 그림을 바꿔도 손댈 필요가 없다. */
+.splash-cta {
   position: absolute;
-  left: 22.3%; right: 24.3%; top: 92.8%; bottom: 2.8%;
-  border: 0; background: transparent; padding: 0;
-  border-radius: 999px; cursor: pointer;
+  left: 50%; bottom: 7%;
+  transform: translateX(-50%);
+  width: 64%; min-width: 168px;
+  min-height: 52px;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  border: 0; border-radius: 999px; cursor: pointer;
+  background: linear-gradient(135deg, var(--gd), var(--g));
+  color: #fff; font-weight: 800; font-size: var(--fs-sm);
+  box-shadow: 0 10px 26px rgba(20, 30, 20, .32);
 }
-.splash-hit:focus-visible { outline: 3px solid var(--gd); outline-offset: 3px; }
-.splash-hit:active { background: rgba(0, 0, 0, .07); }
+.splash-cta:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.splash-cta:active { filter: brightness(.94); }
 
 /* 체험 안내 팝업의 예시 프로필 표 */
 .guest-profile {
@@ -446,21 +455,3 @@
 .header-brand:focus-visible { outline: 2px solid var(--gd); outline-offset: 3px; border-radius: 6px; }
 .header-lead { gap: var(--sp-xs); }
 .header-lead-title { margin-left: var(--sp-xs); }
-
-/* 이미지 한 장으로 채운 화면(온보딩 1~5) 위에 얹는 로고 */
-.shot-brand {
-  position: absolute; top: var(--sp-sm); left: var(--sp-md);
-  display: block; pointer-events: none; z-index: 2;
-}
-.shot-brand img {
-  display: block;
-  height: clamp(26px, 7.4cqi, 36px) !important;
-  width: auto !important;
-  object-fit: contain;
-  mix-blend-mode: multiply;
-}
-/* 건너뛰기는 위쪽 가운데 — 왼쪽 로고, 오른쪽 n/5 배지와 겹치지 않는 자리 */
-.skip.float.right {
-  left: 50%; right: auto;
-  transform: translateX(-50%);
-}
