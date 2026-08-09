@@ -19,24 +19,17 @@ import type {
   NutrientKey,
   Plan,
   Profile,
-  SavedItem,
 } from "./types";
 import {
   addSaved,
   currentUser,
-  deleteEverywhere,
   generateDayPlan,
   generateMeal,
   generateRecipe,
-  getMe,
   getMenus,
   getMenusByIngredient,
   getIngredients,
-  getPotassiumTips,
-  loadEverywhere,
-  logout,
   saveEverywhere,
-  storage,
   textToSpeech,
   warmupBackend,
 } from "./services/api";
@@ -73,6 +66,9 @@ import { FindIdPage } from "./pages/auth/FindIdPage";
 import { FindPasswordPage } from "./pages/auth/FindPasswordPage";
 import { SignupPage } from "./pages/auth/SignupPage";
 import { ProfileSetupPage } from "./pages/auth/ProfileSetupPage";
+import { AccountPage } from "./pages/account/AccountPage";
+import { LibraryPage } from "./pages/account/LibraryPage";
+import { TipsPage } from "./pages/account/TipsPage";
 
 const initialProfile: Profile = {
   gender: "여성",
@@ -239,8 +235,8 @@ function App() {
         <Route path="/profile" element={<ProfileSetupPage />} />
         <Route path="/home" element={<Home />} />
         <Route path="/day" element={<DayPlan />} />
-        <Route path="/tips" element={<Tips />} />
-        <Route path="/account" element={<Account />} />
+        <Route path="/tips" element={<TipsPage />} />
+        <Route path="/account" element={<AccountPage />} />
         <Route path="/history" element={<LibraryPage mode="history" />} />
         <Route path="/favorites" element={<LibraryPage mode="favorites" />} />
         <Route path="/documents" element={<LibraryPage mode="documents" />} />
@@ -1740,56 +1736,6 @@ function DayPlan() {
     </Shell>
   );
 }
-function Tips() {
-  const nav = useNavigate();
-  const [tips, setTips] = useState<
-    { category: string; steps: { title: string; detail: string }[] }[] | null
-  >(null);
-  const [error, setError] = useState("");
-  useEffect(() => {
-    getPotassiumTips()
-      .then((d) => setTips(d.tips || []))
-      .catch(() => setError("팁을 불러오지 못했어요."));
-  }, []);
-  return (
-    <Shell header={false}>
-      <BackHeader title="칼륨 낮추는 조리 팁" />
-      <p className="eyebrow">채소 손질 가이드</p>
-      <h1>
-        채소의 칼륨을
-        <br />
-        줄이는 방법이에요.
-      </h1>
-      {error && <p className="form-error">{error}</p>}
-      {!tips && !error && (
-        <div className="recipe-loading">
-          <div className="spinner" />
-          <span>불러오는 중...</span>
-        </div>
-      )}
-      {tips?.map((cat) => (
-        <section key={cat.category} className="change-section">
-          <div className="change-heading">
-            <div>
-              <b>{cat.category}</b>
-            </div>
-          </div>
-          <ol className="steps">
-            {cat.steps.map((s, i) => (
-              <li key={i} className="step-reveal">
-                <span>{i + 1}</span>
-                <p>
-                  <b>{s.title}</b> — {s.detail}
-                </p>
-              </li>
-            ))}
-          </ol>
-        </section>
-      ))}
-      <Button onClick={() => nav("/account")}>내 정보로 돌아가기</Button>
-    </Shell>
-  );
-}
 function PdfPreview() {
   const nav = useNavigate();
   const { plan, apiResult } = useApp();
@@ -1954,254 +1900,6 @@ function PdfPreview() {
           </tbody>
         </table>
       </div>
-    </Shell>
-  );
-}
-function Account() {
-  const nav = useNavigate();
-  const { profile, setProfile } = useApp();
-  const user = currentUser();
-  if (!user) return <Navigate to="/login" replace />;
-  // 계정 화면에 들어올 때마다 서버의 최신 프로필을 한 번 불러와 화면에 반영한다.
-  // (다른 기기에서 수정했거나, 세션이 오래된 경우에도 항상 최신 값을 보여주기 위함)
-  useEffect(() => {
-    getMe()
-      .then((d) => {
-        if (!d?.profile) return;
-        const p = d.profile;
-        setProfile({
-          ...profile,
-          gender: p.gender || profile.gender,
-          // 생년월일까지 받아둬야 '수정'으로 프로필 화면에 들어갔을 때 값이 채워져 있다.
-          birthdate: p.birthdate || profile.birthdate,
-          age: p.age != null ? String(p.age) : profile.age,
-          height: p.height_cm != null ? String(p.height_cm) : profile.height,
-          weight: p.weight_kg != null ? String(p.weight_kg) : profile.weight,
-          dialysis: p.dialysis_type || profile.dialysis,
-        });
-      })
-      .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } catch {}
-    localStorage.removeItem("fook:user");
-    localStorage.removeItem("fook:token");
-    nav("/start");
-  };
-  return (
-    <Shell header={false} footer={<BottomNav active="account" />}>
-      <BackHeader title="내 정보" />
-      <div className="profile-summary">
-        <div className="avatar">{user.name.slice(0, 1)}</div>
-        <div>
-          <h2>{user.name}님</h2>
-          <p>@{user.username}</p>
-        </div>
-        <button onClick={() => nav("/profile")}>수정</button>
-      </div>
-      <div className="metric-grid">
-        <div>
-          <b>{profile.age}세</b>
-          <span>나이</span>
-        </div>
-        <div>
-          <b>{profile.height}cm</b>
-          <span>신장</span>
-        </div>
-        <div>
-          <b>{profile.weight}kg</b>
-          <span>체중</span>
-        </div>
-        <div>
-          <b>{profile.dialysis}</b>
-          <span>투석 유형</span>
-        </div>
-      </div>
-      <div className="menu-list">
-        <button onClick={() => nav("/history")}>
-          <span>식단 기록</span>
-          <i>›</i>
-        </button>
-        <button onClick={() => nav("/favorites")}>
-          <span>식단 관리</span>
-          <i>›</i>
-        </button>
-        <button onClick={() => nav("/documents")}>
-          <span>PDF 보관함</span>
-          <i>›</i>
-        </button>
-        <button onClick={() => nav("/tips")}>
-          <span>칼륨 낮추는 조리 팁</span>
-          <i>›</i>
-        </button>
-      </div>
-      <button className="logout" onClick={handleLogout}>
-        로그아웃
-      </button>
-    </Shell>
-  );
-}
-// 저장 목록의 카드 한 장 (식단 기록 / 식단 관리 / PDF 보관함 공통)
-function SavedCard({
-  item,
-  mode,
-  onOpen,
-  onRemove,
-}: {
-  item: SavedItem;
-  mode: "history" | "favorites" | "documents";
-  onOpen: (x: SavedItem) => void;
-  onRemove: (id: string) => void;
-}) {
-  return (
-    <article>
-      <div className="saved-thumb">{mode === "documents" ? "PDF" : "KOOK"}</div>
-      <button className="saved-main" onClick={() => onOpen(item)}>
-        <b>{item.title}</b>
-        <span>{item.subtitle}</span>
-        <small>
-          {item.mealDate
-            ? new Date(item.mealDate).toLocaleDateString("ko-KR")
-            : new Date(item.createdAt).toLocaleDateString("ko-KR")}
-        </small>
-      </button>
-      <button className="delete-mini" onClick={() => onRemove(item.id)}>
-        ×
-      </button>
-    </article>
-  );
-}
-function LibraryPage({
-  mode,
-}: {
-  mode: "history" | "favorites" | "documents";
-}) {
-  const nav = useNavigate();
-  if (!currentUser()) return <Navigate to="/login" replace />;
-  const key = `fook:${mode}`;
-  const [items, setItems] = useState<SavedItem[]>(storage.get(key, []));
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    let live = true;
-    setLoading(true);
-    loadEverywhere(key).then((list) => {
-      if (live) {
-        setItems(list);
-        setLoading(false);
-      }
-    });
-    return () => {
-      live = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
-  const meta = {
-    history: ["식단 기록", "최근 생성하고 기록한 식단"],
-    favorites: ["식단 관리", "기록한 식단을 모아두고 다시 불러올 수 있어요"],
-    documents: ["PDF 보관함", "생성한 레시피 문서 기록"],
-  }[mode];
-  const remove = async (id: string) => {
-    setItems((prev) => prev.filter((x) => x.id !== id));
-    await deleteEverywhere(key, id);
-  };
-  const openItem = (x: SavedItem) => {
-    if (x.menus) {
-      storage.set("fook:restore", x);
-      nav("/home");
-    }
-  };
-  return (
-    <Shell
-      header={false}
-      footer={<BottomNav active={mode === "favorites" ? "favorites" : "history"} />}
-    >
-      <BackHeader title={meta[0]} />
-      <p className="eyebrow">MY KOOK</p>
-      <h1>{meta[0]}</h1>
-      <p className="sub">{meta[1]}</p>
-      {loading && (
-        <div className="recipe-loading">
-          <div className="spinner" />
-          <span>불러오는 중...</span>
-        </div>
-      )}
-      {!loading && items.length > 0 && mode === "favorites" && (
-        // 식단 관리는 아침 / 점심 / 저녁 섹션으로 한 줄씩 나눠서 보여준다
-        <>
-          {MEAL_TIMES.map((t) => (
-            <section className="meal-slot-section" key={t}>
-              <h2 className="section-title">
-                {t}
-                <span className="slot-count">
-                  {items.filter((x) => x.mealTime === t).length}
-                </span>
-              </h2>
-              {items.some((x) => x.mealTime === t) ? (
-                <div className="saved-list">
-                  {items
-                    .filter((x) => x.mealTime === t)
-                    .map((x) => (
-                      <SavedCard
-                        key={x.id}
-                        item={x}
-                        mode={mode}
-                        onOpen={openItem}
-                        onRemove={remove}
-                      />
-                    ))}
-                </div>
-              ) : (
-                <p className="slot-empty">아직 {t} 기록이 없어요.</p>
-              )}
-            </section>
-          ))}
-          {/* 끼니를 고르기 전에 저장한 예전 기록 */}
-          {items.some((x) => !x.mealTime) && (
-            <section className="meal-slot-section">
-              <h2 className="section-title">끼니 미지정</h2>
-              <div className="saved-list">
-                {items
-                  .filter((x) => !x.mealTime)
-                  .map((x) => (
-                    <SavedCard
-                      key={x.id}
-                      item={x}
-                      mode={mode}
-                      onOpen={openItem}
-                      onRemove={remove}
-                    />
-                  ))}
-              </div>
-            </section>
-          )}
-        </>
-      )}
-      {!loading && items.length > 0 && mode !== "favorites" && (
-        <div className="saved-list">
-          {items.map((x) => (
-            <SavedCard
-              key={x.id}
-              item={x}
-              mode={mode}
-              onOpen={openItem}
-              onRemove={remove}
-            />
-          ))}
-        </div>
-      )}
-      {!loading && items.length === 0 && (
-        <div className="empty-state">
-          <div>
-            {mode === "favorites" ? "♡" : mode === "documents" ? "PDF" : "◷"}
-          </div>
-          <b>아직 기록된 항목이 없어요.</b>
-          <p>맞춤 식단을 생성한 뒤 기록해보세요.</p>
-          <Button onClick={() => nav("/home")}>식단 만들러 가기</Button>
-        </div>
-      )}
     </Shell>
   );
 }

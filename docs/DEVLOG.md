@@ -4,6 +4,35 @@
 
 ---
 
+## v18 업데이트 — App.tsx 구조 정리 3차-b: `pages/account/` 분리
+
+3단계 리팩터링 계획 중 3단계, 두 번째 묶음. 마이페이지 쪽 화면을 뺐다.
+
+### 새로 생긴 파일
+- `pages/account/AccountPage.tsx` — 내 정보(프로필 요약, 메뉴 목록, 로그아웃)
+- `pages/account/LibraryPage.tsx` — 식단 기록/식단 관리/PDF 보관함 공용 목록 화면.
+  카드 한 장을 그리는 `SavedCard`는 이 페이지 안에서만 쓰여서 같은 파일에 둠
+  (별도 파일로 안 쪼갬 — 2차 때 정한 "너무 잘게 쪼개지 않는다" 원칙)
+- `pages/account/TipsPage.tsx` — 칼륨 낮추는 조리 팁
+
+### 검증
+- ✅ `npx tsc -b --force`(캐시 무시) 통과, `npm run build` 통과
+- ✅ 백엔드 pytest 37개 통과(무변경)
+- ✅ 로컬 백엔드+프론트 실제 클릭: (DB 미연결 환경이라 `localStorage`에 가짜
+  로그인 세션을 넣어 검증) 내 정보 화면(BottomNav "프로필" 탭 하이라이트,
+  프로필 요약·수정 버튼) → 식단 관리(빈 상태 → 저장 항목 1개 넣고 아침/점심/저녁
+  구간별 카드 표시 → 삭제 버튼으로 제거까지) → 식단 기록/PDF 보관함(각각 다른
+  빈 상태 문구·아이콘) → 칼륨 낮추는 조리 팁(백엔드에서 실제 데이터 정상 로드)
+  확인
+
+App.tsx: 2,208줄 → 1,906줄
+
+다음은 3c(`pages/meal/` + `pages/recipe/`) — 마지막이자 가장 위험도 높은 단계.
+`Home → Generating → Analysis → Adjusting → Comparison → Final` 흐름을 한 번에
+같이 검증해야 한다.
+
+---
+
 ## v17 업데이트 — App.tsx 구조 정리 3차-a: `pages/auth/` + `pages/onboarding/` 분리
 
 3단계 리팩터링 계획 중 3단계, 그중 가장 독립적인 auth/onboarding 화면부터 뺐다.
