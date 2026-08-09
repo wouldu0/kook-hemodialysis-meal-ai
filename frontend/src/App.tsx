@@ -16,7 +16,6 @@ import { dietPlans, ingredientData, menuData } from "./fookData";
 import type {
   ApiResult,
   MealTime,
-  MenuRecord,
   NutrientKey,
   Plan,
   Profile,
@@ -49,6 +48,32 @@ import {
   warmupBackend,
 } from "./services/api";
 import { AppContext, useApp } from "./hooks/useApp";
+import { ageFromBirthdate, MEAL_TIMES, defaultMealTime, todayISO } from "./utils/date";
+import { fallbackPlan, labels, menuMap, parseLocalIngredient, roleLong, roleShort } from "./utils/menu";
+import {
+  adjustedNutrition,
+  fmt,
+  fmt2,
+  minTargetOf,
+  nmeta,
+  parseChange,
+  STATUS_CLASS,
+  statusOf,
+  targetOf,
+  totalNutrition,
+} from "./utils/nutrition";
+import type { NStatus, ParsedChange } from "./utils/nutrition";
+import { BellIcon, BookmarkIcon, BowlIcon, ChartIcon, CheckIcon, ClipboardIcon, DiceIcon, DocIcon, HomeIcon, LeafIcon, RefreshIcon, SearchIcon, SlidersIcon, SpeakerIcon, UserIcon } from "./components/icons";
+import { Logo } from "./components/Logo";
+import { Button } from "./components/layout/Button";
+import { Shell } from "./components/layout/Shell";
+import { Header } from "./components/layout/Header";
+import { BackHeader } from "./components/layout/BackHeader";
+import { BottomNav } from "./components/layout/BottomNav";
+import { StepHeader } from "./components/layout/StepHeader";
+import { FlowFooter } from "./components/layout/FlowFooter";
+import { Nutrients } from "./components/meal/Nutrients";
+import { NutrientIconRow } from "./components/meal/NutrientIconRow";
 
 const initialProfile: Profile = {
   gender: "여성",
@@ -58,39 +83,6 @@ const initialProfile: Profile = {
   weight: "65",
   dialysis: "혈액투석",
 };
-// YYYY-MM-DD 생년월일로 만 나이를 계산한다. 형식이 이상하면 null.
-function ageFromBirthdate(birthdate: string): number | null {
-  const m = birthdate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return null;
-  const [, y, mo, d] = m.map(Number) as unknown as number[];
-  const b = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  if (isNaN(b.getTime())) return null;
-  const today = new Date();
-  let age = today.getFullYear() - b.getFullYear();
-  const beforeBirthday =
-    today.getMonth() < b.getMonth() ||
-    (today.getMonth() === b.getMonth() && today.getDate() < b.getDate());
-  if (beforeBirthday) age -= 1;
-  return age >= 1 && age <= 120 ? age : null;
-}
-const menuMap = new Map(menuData.map((m) => [m.name, m as MenuRecord]));
-const fallbackPlan =
-  (dietPlans.find((p) => p.menus.includes("시금치된장국")) as Plan) ||
-  (dietPlans[0] as Plan);
-// 끼니 구분 — 식단 관리 화면에서 아침/점심/저녁 섹션으로 나누는 기준
-const MEAL_TIMES: MealTime[] = ["아침", "점심", "저녁"];
-// 지금 시각으로 기본 끼니를 고른다 (10시 전 아침, 15시 전 점심, 그 뒤 저녁)
-function defaultMealTime(): MealTime {
-  const h = new Date().getHours();
-  return h < 10 ? "아침" : h < 15 ? "점심" : "저녁";
-}
-// <input type="date">에 넣을 오늘 날짜 (YYYY-MM-DD)
-function todayISO(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate(),
-  ).padStart(2, "0")}`;
-}
 const requireUser = (nav: ReturnType<typeof useNavigate>) => {
   if (!currentUser()) {
     nav("/login");
@@ -98,213 +90,10 @@ const requireUser = (nav: ReturnType<typeof useNavigate>) => {
   }
   return true;
 };
-const labels = ["밥", "국", "어육류", "밑반찬", "김치류"];
-// 목업 기준 표기.
-//  · 식단 생성 화면(2/5): 밥 / 국 / 반찬1 / 반찬2 / 반찬3
-//  · 레시피 화면: 밥 / 국 / 찬 1 (어육류) / 찬 2 (밑반찬) / 찬 3 (김치류)
-function roleShort(i: number) {
-  if (i === 0) return "밥";
-  if (i === 1) return "국";
-  return `반찬${i - 1}`;
-}
-function roleLong(i: number) {
-  if (i === 0) return "밥";
-  if (i === 1) return "국";
-  return `찬 ${i - 1} (${labels[i] || "반찬"})`;
-}
-const nmeta: {
-  key: NutrientKey;
-  label: string;
-  unit: string;
-  target: number;
-  icon: string;
-}[] = [
-  { key: "energy", label: "열량", unit: "kcal", target: 550, icon: "🔥" },
-  { key: "protein", label: "단백질", unit: "g", target: 24, icon: "💪" },
-  { key: "phosphorus", label: "인", unit: "mg", target: 550, icon: "🦴" },
-  { key: "potassium", label: "칼륨", unit: "mg", target: 1200, icon: "🌿" },
-  { key: "sodium", label: "나트륨", unit: "mg", target: 400, icon: "🧂" },
-];
-function totalNutrition(plan: Plan) {
-  return plan.menus.reduce(
-    (a, name) => {
-      const n = menuMap.get(name)?.nutrition;
-      for (const k of [
-        "energy",
-        "protein",
-        "phosphorus",
-        "potassium",
-        "sodium",
-      ] as NutrientKey[])
-        a[k] += n?.[k] || 0;
-      return a;
-    },
-    { energy: 0, protein: 0, phosphorus: 0, potassium: 0, sodium: 0 },
-  );
-}
-function adjustedNutrition(raw: ReturnType<typeof totalNutrition>) {
-  return {
-    energy: Math.min(raw.energy, 520),
-    protein: Math.min(raw.protein, 24),
-    phosphorus: Math.min(raw.phosphorus, 520),
-    potassium: Math.min(raw.potassium, 1150),
-    sodium: Math.min(raw.sodium, 390),
-  };
-}
-function fmt(v: number) {
-  return Math.round(v).toLocaleString("ko-KR");
-}
-// 재료·간식의 '양(g)'은 반올림하지 않고 항상 소수점 2자리까지 보여준다.
-// (0.5g 차이가 저나트륨/저칼륨 조리에서는 의미가 있어서, 반올림하면 조정 내역이 안 보인다.)
-function fmt2(v: number) {
-  return Number(v || 0).toLocaleString("ko-KR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-// 서버 미연결(오프라인) 폴백 데이터의 재료는 "시금치, 생것 37.5g"처럼 양이 문자열에 붙어 있다.
-// 서버 응답과 같은 [이름, 양] 형태로 쪼개서, 표시할 때 동일하게 소수점 2자리로 맞춘다.
-function parseLocalIngredient(raw: string): [string, number] {
-  const m = raw.match(/^(.*?)\s+([\d.]+)\s*g$/);
-  return m ? [m[1], Number(m[2])] : [raw, 0];
-}
-// 브랜드 로고. 사용자가 직접 준비한 kook-logo.png가 있으면 그걸 쓰고,
-// 없으면 같은 폴더의 kook-logo.svg(코드로 그린 동일 디자인)로 자동 대체한다.
-function Logo({ className = "" }: { className?: string }) {
-  return (
-    <img
-      className={className}
-      src="/assets/kook-logo.png"
-      alt="KOOK"
-      onError={(e) => {
-        const img = e.currentTarget;
-        if (!img.src.endsWith(".svg")) img.src = "/assets/kook-logo.svg";
-      }}
-    />
-  );
-}
-
 // ── 음성 안내 ────────────────────────────────────────────────────────────────
 // 요구사항: "눌러야 나온다" — 화면에 들어왔다고 저절로 읽지 않고, 버튼을 누른 순간에만 읽는다.
 // 브라우저 내장 음성합성(무료·즉시 재생·오프라인)을 우선 쓰고, 그게 없는 환경에서만
 // 서버 /tts(OpenAI)를 부른다. 서버 TTS는 OPENAI_API_KEY가 없으면 실패하므로 폴백 순서가 중요하다.
-// ── 목업 아이콘 (선화 스타일, currentColor로 색을 상속받는다) ─────────────────
-const svg = (d: any, extra: any = {}) => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.8}
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-    {...extra}
-  >
-    {d}
-  </svg>
-);
-const BellIcon = () =>
-  svg(
-    <>
-      <path d="M18 8a6 6 0 1 0-12 0c0 7-2 8-2 8h16s-2-1-2-8" />
-      <path d="M13.7 20a2 2 0 0 1-3.4 0" />
-    </>,
-  );
-const UserIcon = () =>
-  svg(
-    <>
-      <path d="M19 21v-1a7 7 0 0 0-14 0v1" />
-      <circle cx="12" cy="7.5" r="3.8" />
-    </>,
-  );
-const SearchIcon = () =>
-  svg(
-    <>
-      <circle cx="11" cy="11" r="7" />
-      <path d="m20 20-3.6-3.6" />
-    </>,
-  );
-const LeafIcon = () =>
-  svg(
-    <>
-      <path
-        d="M11 20A7 7 0 0 1 4 13c0-6 7-9 16-9 0 9-3 16-9 16Z"
-        fill="currentColor"
-        stroke="none"
-      />
-      <path d="M4.5 20c3.5-6 8.5-9.5 13.5-11.5" stroke="#fff" />
-    </>,
-  );
-const DiceIcon = () =>
-  svg(
-    <>
-      <rect x="3.5" y="3.5" width="17" height="17" rx="4" fill="currentColor" stroke="none" />
-      <g fill="#fff">
-        <circle cx="8.2" cy="8.2" r="1.5" />
-        <circle cx="15.8" cy="8.2" r="1.5" />
-        <circle cx="12" cy="12" r="1.5" />
-        <circle cx="8.2" cy="15.8" r="1.5" />
-        <circle cx="15.8" cy="15.8" r="1.5" />
-      </g>
-    </>,
-  );
-const SlidersIcon = () =>
-  svg(
-    <>
-      <path d="M4 7h11M18.5 7H20M4 17h5M12.5 17H20" />
-      <circle cx="16" cy="7" r="1.9" />
-      <circle cx="10.5" cy="17" r="1.9" />
-    </>,
-  );
-const CheckIcon = () => svg(<path d="m5 12.5 4.5 4.5L19 7" />, { strokeWidth: 2.4 });
-const BowlIcon = () =>
-  svg(
-    <>
-      <path d="M3.5 11h17a8.5 8.5 0 0 1-17 0Z" />
-      <path d="M9 6c0-1.2 1-1.6 1-2.8M12.5 6c0-1.6 1.2-2 1.2-3.4M16 6c0-1.2 1-1.6 1-2.6" />
-    </>,
-  );
-const HomeIcon = () =>
-  svg(<path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1Z" />);
-const ClipboardIcon = () =>
-  svg(
-    <>
-      <rect x="5" y="4" width="14" height="17" rx="2.5" />
-      <path d="M9 4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V6H9Z" />
-      <path d="M9 11h6M9 15h4" />
-    </>,
-  );
-const DocIcon = () =>
-  svg(
-    <>
-      <path d="M6 3h7l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
-      <path d="M13 3v5h5M8.5 13h7M8.5 17h5" />
-    </>,
-  );
-const BookmarkIcon = () =>
-  svg(<path d="M7 3h10a1 1 0 0 1 1 1v17l-6-4-6 4V4a1 1 0 0 1 1-1Z" />);
-const SpeakerIcon = () =>
-  svg(
-    <>
-      <path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4Z" />
-      <path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" />
-    </>,
-  );
-const RefreshIcon = () =>
-  svg(
-    <>
-      <path d="M20 12a8 8 0 1 1-2.6-5.9" />
-      <path d="M20 4v4h-4" />
-    </>,
-  );
-const ChartIcon = () =>
-  svg(
-    <>
-      <rect x="3.5" y="3.5" width="17" height="17" rx="3" />
-      <path d="M8 16v-4M12 16V8M16 16v-2.5" />
-    </>,
-  );
-
 function useSpeech() {
   const [speaking, setSpeaking] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -360,99 +149,6 @@ function useSpeech() {
   };
   return { speak, stop, speaking };
 }
-// 화면 설명을 읽어주는 버튼. 누르기 전에는 아무 소리도 나지 않는다.
-// 흐름 화면 하단의 '이전 / 단계 점 / 다음' 네비게이션.
-// 어느 단계에서든 앞 화면으로 다시 돌아가 볼 수 있어야 한다는 요구사항을 이걸로 처리한다.
-function FlowFooter({
-  step,
-  total,
-  onPrev,
-  onNext,
-  nextLabel = "다음",
-  prevLabel = "이전",
-}: {
-  step: number;
-  total: number;
-  onPrev?: () => void;
-  onNext?: () => void;
-  nextLabel?: string;
-  prevLabel?: string;
-}) {
-  return (
-    <div className="flow-footer">
-      {onPrev ? (
-        <button className="flow-btn ghost" onClick={onPrev}>
-          <i>‹</i> {prevLabel}
-        </button>
-      ) : (
-        <span />
-      )}
-      <div className="flow-dots">
-        {Array.from({ length: total }, (_, i) => (
-          <span key={i} className={i + 1 === step ? "fdot on" : "fdot"} />
-        ))}
-      </div>
-      {onNext ? (
-        <button className="flow-btn solid" onClick={onNext}>
-          {nextLabel} <i>›</i>
-        </button>
-      ) : (
-        <span />
-      )}
-    </div>
-  );
-}
-// 서버 targets는 키마다 형태가 다르다: energy/protein은 [최소,최대] 배열,
-// potassium/phosphorus/sodium은 숫자 하나. 화면에서 '상한선' 하나만 필요할 때 쓰는 공용 함수.
-// targets가 아직 없으면(서버 미연결) nmeta의 대표값으로 대체한다.
-function targetOf(targets: any, key: NutrientKey): number {
-  const raw = targets?.[key];
-  if (raw != null) return Array.isArray(raw) ? Number(raw[1]) : Number(raw);
-  return nmeta.find((n) => n.key === key)?.target ?? 0;
-}
-// energy/protein은 서버가 [최소,최대] 범위로 내려준다. 그 최소값(하한)을 뽑는다.
-// potassium/phosphorus/sodium처럼 상한만 있는 항목은 하한이 없다는 뜻으로 0을 반환.
-function minTargetOf(targets: any, key: NutrientKey): number {
-  const raw = targets?.[key];
-  if (Array.isArray(raw)) return Number(raw[0]);
-  return 0;
-}
-// changes 문자열 한 줄을 화면에 쓸 형태로 분류한다. app_core_FOOK._changes()가
-// 만드는 3가지 패턴을 그대로 파싱: 교체/양조절/재료대체/메뉴제외.
-type ParsedChange = {
-  kind: "amount" | "ingredient" | "swap" | "removed" | "other";
-  menu: string;
-  before?: string;
-  after?: string;
-  raw: string;
-};
-function parseChange(line: string): ParsedChange {
-  let m = line.match(/^(.+?): (.+) 양 ([\d.]+)→([\d.]+)g$/);
-  if (m)
-    return {
-      kind: "amount",
-      menu: m[1],
-      before: `${m[2]} ${m[3]}g`,
-      after: `${m[2]} ${m[4]}g`,
-      raw: line,
-    };
-  m = line.match(/^(.+?): (.+) → (.+)$/);
-  if (m)
-    return {
-      kind: "ingredient",
-      menu: m[1],
-      before: m[2],
-      after: m[3],
-      raw: line,
-    };
-  m = line.match(/^(.+?) → (.+?) 교체$/);
-  if (m)
-    return { kind: "swap", menu: m[1], before: m[1], after: m[2], raw: line };
-  m = line.match(/^(.+?) 뺌$/);
-  if (m) return { kind: "removed", menu: m[1], raw: line };
-  return { kind: "other", menu: "", raw: line };
-}
-
 // 어느 화면에서 렌더 오류가 나도 흰 화면이 되지 않도록 막는다.
 // (예전에 '빈 화면'이 보이던 상황에서 원인을 바로 알 수 있게 메시지도 띄운다)
 class ErrorBoundary extends Component<
@@ -561,148 +257,6 @@ function App() {
       </Routes>
       </ErrorBoundary>
     </AppContext.Provider>
-  );
-}
-function StepHeader({ step, total }: { step: number; total: number }) {
-  return (
-    <div className="step-header">
-      <div className="step-dots">
-        {Array.from({ length: total }, (_, i) => i + 1).map((n, i) => (
-          <div className="step-dot-wrap" key={n}>
-            <span className={n <= step ? "step-circle done" : "step-circle"}>
-              {n}
-            </span>
-            {i < total - 1 && (
-              <span className={n < step ? "step-line done" : "step-line"} />
-            )}
-          </div>
-        ))}
-      </div>
-      <span className="step-count">
-        {step} / {total}
-      </span>
-    </div>
-  );
-}
-function Shell({
-  children,
-  footer,
-  header = true,
-  full = false,
-}: {
-  children: any;
-  footer?: any;
-  header?: boolean;
-  full?: boolean;      // 이미지 한 장이 화면 전체를 채울 때 본문 여백을 없앤다
-}) {
-  const { usingFallback } = useApp();
-  return (
-    <main className="page">
-      <div className="phone">
-        {header && <Header />}
-        <section className={full ? "screen screen-full" : "screen"}>
-          {usingFallback && (
-            <div className="warning-box fallback-banner">
-              <b>⚠ 예시 데이터를 보고 있어요</b>
-              <span>
-                서버 연결에 실패해서 실제 개인 맞춤 계산이 아닌 내장 예시 값으로
-                화면을 보여주고 있습니다. 아래 영양 판정·재구성 내역은 참고용이
-                아니라 그저 화면 구성을 보여주기 위한 예시입니다.
-              </span>
-            </div>
-          )}
-          {children}
-        </section>
-        {footer && <footer className="footer">{footer}</footer>}
-      </div>
-    </main>
-  );
-}
-function Header() {
-  const nav = useNavigate();
-  return (
-    <header className="header">
-      <button className="logo-button" onClick={() => nav("/home")}>
-        <Logo />
-      </button>
-      <div className="header-actions">
-        <button className="icon-ghost" aria-label="알림" onClick={() => nav("/history")}>
-          <BellIcon />
-        </button>
-        <button
-          className="icon-avatar"
-          aria-label="내 정보"
-          onClick={() => nav("/account")}
-        >
-          <UserIcon />
-        </button>
-      </div>
-    </header>
-  );
-}
-function BackHeader({
-  title,
-  onBack,
-  dot = false,
-}: {
-  title?: string;
-  onBack?: () => void;
-  dot?: boolean;
-}) {
-  const nav = useNavigate();
-  return (
-    <header className="header detail-header">
-      <div className="header-lead">
-        <button
-          className="icon-back"
-          aria-label="뒤로"
-          onClick={() => (onBack ? onBack() : nav(-1))}
-        >
-          ‹
-        </button>
-        {/* 어느 화면에 있어도 브랜드가 보이도록 왼쪽 위에 로고를 둔다. 누르면 홈으로. */}
-        <button
-          className="header-brand"
-          aria-label="KOOK 홈으로"
-          onClick={() => nav("/home")}
-        >
-          <Logo />
-        </button>
-        {title && <b className="header-lead-title">{title}</b>}
-      </div>
-      <div className="header-actions">
-        <button
-          className={dot ? "icon-ghost has-dot" : "icon-ghost"}
-          aria-label="알림"
-          onClick={() => nav("/history")}
-        >
-          <BellIcon />
-        </button>
-        <button
-          className="icon-avatar"
-          aria-label="내 정보"
-          onClick={() => nav("/account")}
-        >
-          <UserIcon />
-        </button>
-      </div>
-    </header>
-  );
-}
-function Button({
-  children,
-  onClick,
-  secondary = false,
-  disabled = false,
-}: any) {
-  return (
-    <button
-      className={secondary ? "btn btn-secondary" : "btn"}
-      onClick={onClick}
-      disabled={disabled}
-    >
-      {children}
-    </button>
   );
 }
 function Trust() {
@@ -1035,21 +589,6 @@ function OnboardingVisual({ type }: { type: string }) {
   );
 }
 // 영양소 5종 아이콘 요약 줄 (목업 3/5 · 영양 적합성 판정 화면 공통)
-function NutrientIconRow({ caption }: { caption?: string }) {
-  return (
-    <div className="nutrient-icon-row">
-      <div className="nutrient-icons">
-        {nmeta.map((n) => (
-          <div key={n.key}>
-            <span>{n.icon}</span>
-            <small>{n.label}</small>
-          </div>
-        ))}
-      </div>
-      {caption && <p className="nutrient-icon-caption">{caption}</p>}
-    </div>
-  );
-}
 function Login() {
   const nav = useNavigate();
   const { setPlan, setQuery, setApiResult } = useApp();
@@ -2144,62 +1683,6 @@ function MealResult() {
         ))}
       </div>
     </Shell>
-  );
-}
-// 영양소 하나의 상태를 판정한다. lo가 0이면(칼륨·인·나트륨) 상한만 본다.
-type NStatus = "미만" | "적절" | "초과";
-function statusOf(v: number, lo: number, hi: number): NStatus {
-  if (lo > 0 && v < lo) return "미만";
-  return v > hi ? "초과" : "적절";
-}
-const STATUS_CLASS: Record<NStatus, string> = {
-  미만: "under",
-  적절: "ok",
-  초과: "over",
-};
-// 영양소 목록. 목업 요청 반영:
-//  · 원 그래프(도넛) 없음
-//  · 한 줄에 "아이콘 이름 / 수치 (기준 얼마) / 판정 뱃지"
-//  · 기준을 넘으면 카드 전체가 빨간 배경, 적절하면 초록 배경
-function Nutrients({
-  values,
-  targets,
-  isFallback = false,
-}: {
-  values: ReturnType<typeof totalNutrition>;
-  targets?: any;
-  // true면 실제 서버 판정이 아니라 내장 예시 데이터라는 뜻 — 뱃지를 '적절/초과' 대신
-  // 중립적인 '예시'로 표시해서, 개인 맞춤 판정처럼 보이지 않게 한다.
-  isFallback?: boolean;
-}) {
-  return (
-    <div className="nutri-list">
-      {nmeta.map((n) => {
-        const v = Number(values?.[n.key] || 0);
-        const hi = targetOf(targets, n.key);
-        const lo = minTargetOf(targets, n.key);
-        const status = statusOf(v, lo, hi);
-        const cls = isFallback ? "demo" : STATUS_CLASS[status];
-        return (
-          <div className={`nutri-card ${cls}`} key={n.key}>
-            <span className="nutri-icon">{n.icon}</span>
-            <span className="nutri-body">
-              <b className="nutri-name">{n.label}</b>
-              <span className="nutri-value">
-                {fmt(v)}
-                <small> {n.unit}</small>
-                <em className="nutri-target">
-                  {lo > 0
-                    ? `(기준 ${fmt(lo)}~${fmt(hi)} ${n.unit})`
-                    : `(기준 ${fmt(hi)} ${n.unit} 이하)`}
-                </em>
-              </span>
-            </span>
-            <i className={`nutri-badge ${cls}`}>{isFallback ? "예시" : status}</i>
-          </div>
-        );
-      })}
-    </div>
   );
 }
 function Analysis() {
@@ -3449,33 +2932,6 @@ function PdfPreview() {
         </table>
       </div>
     </Shell>
-  );
-}
-function BottomNav({
-  active,
-}: {
-  active: "home" | "history" | "favorites" | "account";
-}) {
-  const nav = useNavigate();
-  // 목업 하단 탭: 홈 / 식단 관리 / 프로필 3개
-  const items = [
-    ["home", <HomeIcon key="h" />, "홈", "/home"],
-    ["favorites", <ClipboardIcon key="c" />, "식단 관리", "/favorites"],
-    ["account", <UserIcon key="u" />, "프로필", "/account"],
-  ] as const;
-  return (
-    <nav className="bottom-nav three">
-      {items.map(([k, icon, label, path]) => (
-        <button
-          key={k}
-          className={active === k ? "active" : ""}
-          onClick={() => nav(path)}
-        >
-          <i>{icon}</i>
-          <span>{label}</span>
-        </button>
-      ))}
-    </nav>
   );
 }
 function Account() {

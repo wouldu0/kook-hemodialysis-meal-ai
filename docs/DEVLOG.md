@@ -4,6 +4,35 @@
 
 ---
 
+## v16 업데이트 — App.tsx 구조 정리 2차: 공용 컴포넌트/유틸 추출
+
+3단계 리팩터링 계획 중 2단계. 여러 화면이 함께 쓰는, 상태·API 의존이 적은 조각부터 뺐다.
+
+### 새로 생긴 파일
+- `components/icons.tsx` — 아이콘 15종 (기존에 App.tsx 안에서 여기저기 쓰이던 것)
+- `components/Logo.tsx` — 브랜드 로고
+- `components/layout/` — `Shell`, `Header`, `BackHeader`, `BottomNav`, `StepHeader`,
+  `FlowFooter`, `Button` (거의 모든 화면이 쓰는 레이아웃 뼈대)
+- `components/meal/` — `Nutrients`, `NutrientIconRow` (영양소 카드·판정 뱃지)
+- `utils/date.ts` — `ageFromBirthdate`, `todayISO`, `MEAL_TIMES`, `defaultMealTime`
+- `utils/menu.ts` — `menuMap`, `fallbackPlan`, `roleShort`/`roleLong`, `parseLocalIngredient`
+- `utils/nutrition.ts` — `nmeta`, `totalNutrition`, `adjustedNutrition`, `fmt`/`fmt2`,
+  `targetOf`/`minTargetOf`, `statusOf`/`STATUS_CLASS`, `parseChange`
+
+이번 단계에선 `App.tsx` 안에서 정의만 옮기고 사용하는 쪽(각 화면 함수)은 import로만
+바꿨다 — 화면 자체(Login, Home, Analysis 등)는 아직 App.tsx 안에 있다(3단계에서 이동).
+
+### 검증
+- ✅ `npx tsc -b --force`(캐시 무시) 통과, `npm run build` 통과
+- ✅ 백엔드 pytest 37개 통과(무변경)
+- ✅ 로컬 백엔드+프론트 실제 클릭: 로그인 화면(Shell/Header) → 메뉴 지정 생성
+  (BackHeader) → 영양 판정 화면(Nutrients, 실제 서버 값으로 적절/초과 판정 정상 표시,
+  서버 미연결 시나리오에서는 예시 뱃지도 정상 표시) 확인
+
+App.tsx: 3,753줄 → 3,185줄
+
+---
+
 ## v15 업데이트 — App.tsx 구조 정리 1차: API 서비스 함수화 + `?api=` 완전 제거
 
 App.tsx(3,700여 줄)를 pages/components/services/hooks로 나누는 작업의 1단계.

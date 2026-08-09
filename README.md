@@ -355,10 +355,15 @@ KOOK/
 │
 ├── 📂 frontend/                                 # React 앱
 │   ├── 📂 src/
-│   │   ├── App.tsx                              # 🎨 화면 컴포넌트 · 라우팅
+│   │   ├── App.tsx                              # 🎨 화면 컴포넌트(페이지 단위) · 라우팅
 │   │   ├── types.ts                             # 공용 타입 (ApiResult 등 서버 응답 형태 포함)
-│   │   ├── 📂 services/api.ts                   # 백엔드 통신 + 로컬↔서버 동기화
+│   │   ├── 📂 services/api.ts                   # 백엔드 통신 + 로컬↔서버 동기화 (엔드포인트별 함수)
 │   │   ├── 📂 hooks/useApp.ts                   # AppContext/useApp
+│   │   ├── 📂 components/
+│   │   │   ├── icons.tsx, Logo.tsx              # 공용 아이콘 · 로고
+│   │   │   ├── 📂 layout/                       # Shell, Header, BackHeader, BottomNav 등
+│   │   │   └── 📂 meal/                         # Nutrients, NutrientIconRow
+│   │   ├── 📂 utils/                            # date.ts, menu.ts, nutrition.ts (순수 함수)
 │   │   ├── fookData.ts                          # 서버 미연결 시 폴백용 예시 데이터
 │   │   ├── mockup.css                           # 화면 디자인
 │   │   ├── fluid.css                            # 📱 휴대폰 크기별 유동 대응
