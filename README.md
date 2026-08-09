@@ -29,7 +29,7 @@
 
 ### 🔗 배포된 서비스
 
-**[https://kook-omega.vercel.app](https://kook-omega.vercel.app)**
+**[https://kook-hemodialysis-meal-ai.vercel.app](https://kook-hemodialysis-meal-ai.vercel.app)**
 
 <sub>무료 호스팅이라 15분간 접속이 없으면 서버가 잠듭니다. 첫 화면이 뜨는 데 최대 1분 걸릴 수 있습니다.</sub>
 
@@ -63,15 +63,16 @@ KOOK은 이 문제를 **"생성 → 검증 → 재조정 반복"** 구조로 풉
 ## 🗂️ 목차
 
 1. [서비스 플로우](#-서비스-플로우)
-2. [핵심 기술 — 영양소 재조정 레버](#-핵심-기술--영양소-재조정-레버)
-3. [주요 기능](#-주요-기능)
-4. [영양 기준 산출 방식](#-영양-기준-산출-방식)
-5. [기술 스택](#️-기술-스택)
-6. [시스템 구성](#-시스템-구성)
-7. [파일 구조](#-파일-구조)
-8. [실측 성능](#-실측-성능)
-9. [배운 점 · 성장 포인트](#-배운-점--성장-포인트)
-10. [실행 방법](#️-실행-방법)
+2. [서비스 화면](#️-서비스-화면)
+3. [핵심 기술 — 영양소 재조정 레버](#-핵심-기술--영양소-재조정-레버)
+4. [주요 기능](#-주요-기능)
+5. [영양 기준 산출 방식](#-영양-기준-산출-방식)
+6. [기술 스택](#️-기술-스택)
+7. [시스템 구성](#-시스템-구성)
+8. [파일 구조](#-파일-구조)
+9. [실측 성능](#-실측-성능)
+10. [배운 점 · 성장 포인트](#-배운-점--성장-포인트)
+11. [실행 방법](#️-실행-방법)
 
 ---
 
@@ -111,6 +112,20 @@ KOOK은 이 문제를 **"생성 → 검증 → 재조정 반복"** 구조로 풉
         ↓
 ⑧ 음성 단계 안내 · A4 1장 PDF 저장 · 아침/점심/저녁 기록
 ```
+
+---
+
+## 🖼️ 서비스 화면
+
+실제 배포 서비스에서 캡처한 화면입니다. 위 플로우의 ②~⑤단계가 화면에서 어떻게 이어지는지 보여줍니다.
+
+| ② 한 끼 식단 생성 | ④ 영양 적합성 판정 |
+|:---:|:---:|
+| <img src="assets/screen_meal_generate.png" width="240"> | <img src="assets/screen_nutrition_check.png" width="240"> |
+
+| ⑤ 재조정 전/후 비교 | ⑦ AI 레시피 재구성 |
+|:---:|:---:|
+| <img src="assets/screen_recipe_adjust.png" width="240"> | <img src="assets/screen_recipe_ai.png" width="240"> |
 
 ---
 
@@ -278,13 +293,13 @@ KOOK은 이 문제를 **"생성 → 검증 → 재조정 반복"** 구조로 풉
                │ HTTPS
                ▼
 ┌─────────────────────────────┐
-│  Vercel — React 19 + Vite    │   kook-omega.vercel.app
+│  Vercel — React 19 + Vite    │   kook-hemodialysis-meal-ai.vercel.app
 │  화면 · PDF 생성 · 음성 안내    │
 └──────────────┬──────────────┘
                │ REST API (CORS)
                ▼
 ┌─────────────────────────────┐
-│  Render — FastAPI (Docker)   │   kook-backend.onrender.com
+│  Render — FastAPI (Docker)   │   kook-backend-ibbe.onrender.com
 │  ┌────────────────────────┐  │
 │  │ Seq2Seq + Attention    │  │  ← 한 끼 생성
 │  │ REINFORCE 체크포인트     │  │  ← 기준 준수 보정
@@ -343,7 +358,7 @@ KOOK/
 │   ├── 📂 Exploiting-Food-Embeddings-.../       # 재료 대체 임베딩
 │   ├── schemas.py                               # 요청 스키마(Pydantic) — TF 모델 import 안 함
 │   ├── rate_limit.py                            # 인메모리 rate limiter(로그인·OpenAI 엔드포인트용)
-│   ├── 📂 tests/                                # pytest — 순수 함수만(TF 모델 로딩 없음)
+│   ├── 📂 tests/                                # pytest 63개 — 순수 함수만(TF 모델 로딩 없음)
 │   ├── 📂 scripts/smoke_generate_day.py         # 실제 모델 대상 수동 스모크 테스트(CI 미포함)
 │   ├── requirements-dev.txt                     # CI용 최소 의존성(pytest, fastapi, httpx 등)
 │   └── 식약청_영양성분10.4(수정).xlsx              # 영양성분 DB
@@ -388,7 +403,7 @@ KOOK/
 ├── 📂 docs/
 │   └── DEVLOG.md                                # 개발 변경 이력 (v13 등)
 │
-├── 📂 .github/workflows/ci.yml                  # 백엔드 pytest + 프론트 빌드 (모델 로딩 없음)
+├── 📂 .github/workflows/ci.yml                  # 백엔드 pytest 63개 + 프론트 타입체크·빌드 (모델 로딩 없음)
 └── render.yaml                                  # Render 배포 설계도
 ```
 
@@ -424,6 +439,9 @@ KOOK/
 | 📱 **반응형 설계** | Container Query · clamp() 유동 레이아웃 | 화면 크기를 특정하지 않고 모든 휴대폰에 대응 |
 | 🔐 **비밀값 관리** | 환경변수 분리 · .gitignore 설계 | API 키를 저장소에 남기지 않고 배포하는 방법 |
 | 🩺 **장애 대응 설계** | 콜드스타트 대응 · 서버 미연결 시 로컬 폴백 | 무료 인프라의 한계를 사전 워밍업과 폴백으로 흡수 |
+| 🧵 **동시성 버그 재현·수정** | 스레드 간 공유되는 TF 모델에서 레이스 컨디션 진단 | `threading.Lock` + 기동 시 워밍업으로 수정, 되돌려서 재현→다시 적용해 재검증(동시 요청 40/40 통과)까지 인과관계로 증명 |
+| 🛡️ **API 보안 강화** | Rate limiting(IP별 sliding window) · CORS 도메인 제한 · 에러 메시지 비노출 | 인증·LLM 엔드포인트의 무차별 대입·오남용 표면을 줄이고, 에러 응답이 DB 정보를 흘리지 않게 서버 로그와 분리 |
+| 🧩 **대규모 구조 리팩터링** | 3,753줄짜리 단일 `App.tsx`를 `pages/components/hooks/services/utils`로 단계별 분리(최종 150줄) | 상태가 얽힌 화면 전환 로직을 한 번에 안 건드리고, 라우트 단위로 나눠 매 단계 빌드·클릭 검증하며 안전하게 축소하는 방법 |
 
 ---
 
