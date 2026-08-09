@@ -4,6 +4,49 @@
 
 ---
 
+## v21 업데이트 — App.tsx 구조 정리 3차-c3: `pages/recipe/` (레시피, PDF) — 3차 리팩터링 종료
+
+3차-c의 마지막 묶음이자, App.tsx를 `pages/`·`components/`로 나누는 3단계
+리팩터링 전체의 마지막 단계.
+
+### 새로 생긴 파일
+- `pages/recipe/RecipePage.tsx` — 레시피 상세 (`/recipe/:name`)
+- `pages/recipe/PdfPreviewPage.tsx` — PDF 미리보기·다운로드 (`/pdf`)
+
+### 검증
+- ✅ `npx tsc -b --force`(캐시 무시) 통과, `npm run build` 통과
+- ✅ 백엔드 pytest 37개 통과(무변경)
+- ✅ 로컬 백엔드+프론트 실제 클릭: 레시피 상세 화면 직접 진입(재료·조리과정
+  정상 표시) → 음성 안내 버튼 클릭(모달 열림, 1/3→2/3 단계 이동, 다시
+  듣기/닫기 정상 동작) → PDF 미리보기(서버 미연결 시 예시 데이터 경고 배너
+  포함) → PDF 다운로드 버튼 클릭(html2canvas+jsPDF 동적 import, 버튼이
+  "생성 중..."에서 정상 복귀, 콘솔 에러 없음) 확인
+
+App.tsx: 412줄 → **150줄**
+
+### 3차 리팩터링 전체 요약
+| 단계 | 내용 | App.tsx 줄 수 |
+|---|---|---|
+| 시작 | — | 3,753 |
+| 3a | `pages/auth/`, `pages/onboarding/` | 2,208 |
+| 3b | `pages/account/` | 1,906 |
+| 3c1 | `pages/meal/`(Home, DayPlan) + 공용 컴포넌트 4종 선추출 | 1,121 |
+| 3c2 | `pages/meal/`(생성 workflow 6개 화면) | 412 |
+| 3c3 | `pages/recipe/` | **150** |
+
+App.tsx는 이제 라우팅 등록과 `AppContext.Provider`, `ErrorBoundary`만
+담당한다. 목표(500~1,000줄)보다 더 줄었지만, 이는 남길 게 실제로
+`App()` 루트 컴포넌트뿐이라 자연스러운 결과다 — 억지로 컴포넌트를
+쪼개 만든 숫자가 아니다.
+
+이번 3차 전체를 통해 3930줄짜리 단일 파일이 `pages/`(라우트별 화면),
+`components/`(화면 간 공용 조각), `hooks/`, `utils/`, `services/`로
+역할이 분리됐다. 매 하위 단계마다 `tsc/build/pytest` + 실제 브라우저
+클릭으로 검증하고 따로 커밋·푸시했다(상태 의존이 큰 3c2만 예외로 6개
+화면을 한 흐름으로 묶어 검증).
+
+---
+
 ## v20 업데이트 — App.tsx 구조 정리 3차-c2: `pages/meal/` 2부 (생성 workflow 전체)
 
 3차-c의 두 번째 묶음. `Home → Generating → MealResult → Analysis → Adjusting →
