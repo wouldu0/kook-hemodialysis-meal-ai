@@ -341,8 +341,11 @@ KOOK/
 │   │       └── ckpt-1.data-00000-of-00001       # ⭐ 강화학습 체크포인트
 │   │
 │   ├── 📂 Exploiting-Food-Embeddings-.../       # 재료 대체 임베딩
+│   ├── schemas.py                               # 요청 스키마(Pydantic) — TF 모델 import 안 함
+│   ├── rate_limit.py                            # 인메모리 rate limiter(로그인·OpenAI 엔드포인트용)
 │   ├── 📂 tests/                                # pytest — 순수 함수만(TF 모델 로딩 없음)
-│   ├── requirements-dev.txt                     # CI용 최소 의존성(pytest + openpyxl)
+│   ├── 📂 scripts/smoke_generate_day.py         # 실제 모델 대상 수동 스모크 테스트(CI 미포함)
+│   ├── requirements-dev.txt                     # CI용 최소 의존성(pytest, fastapi, httpx 등)
 │   └── 식약청_영양성분10.4(수정).xlsx              # 영양성분 DB
 │
 ├── 📂 model-development/                        # 🔬 AI 엔진 개발·검증 이력 (배포 미포함)
@@ -489,8 +492,10 @@ npm run dev
 >
 > ⚠️ **아이디/비밀번호 찾기는 데모 환경 기준의 간소화된 인증입니다.** 이메일·SMS 발송
 > 수단이 없어 이름+생년월일 확인만으로 처리합니다(비밀번호 자체는 PBKDF2-SHA256
-> 310,000회 + 랜덤 salt로 해싱, 세션 토큰도 해시로 저장). 실제 서비스로 운영한다면
-> 이메일/SMS OTP 같은 별도 인증 수단이 필요합니다.
+> 310,000회 + 랜덤 salt로 해싱, 세션 토큰도 해시로 저장). 무차별 대입 시도는 IP별
+> rate limit(`/auth/login` 5분 10회, `/auth/reset-password` 15분 5회)으로 늦추지만,
+> 본인 확인 자체가 약하다는 한계는 남아있습니다. 실제 서비스로 운영한다면 이메일/SMS
+> OTP 같은 별도 인증 수단이 필요합니다.
 
 ---
 

@@ -4,6 +4,87 @@
 
 ---
 
+## v22 업데이트 — `/generate_day` 동시성 버그 수정 + 보안 하드닝 3종 + 경량 테스트 추가
+
+3차 리팩터링(App.tsx 분리) 종료 후, "코드를 더 예쁘게" 대신 "실제로 남은 문제"를
+우선순위로 처리했다.
+
+### 1) `/generate_day` 간헐적 500 오류 — 근본 원인과 수정
+브라우저 검증 중 `/generate_day`가 가끔 `'GRUCell' object has no attribute
+'kernel'`(또는 `'recurrent_kernel'`)로 실패하는 걸 발견했다. 재현 실험으로 원인을
+확정했다:
+
+- `app_core_FOOK.py`의 `gen`(TF 모델, encoder/decoder)은 모듈 전역 객체로 **한 번만**
+  만들어진다.
+- `gen.encoder`/`gen.decoder`를 실제로 건드리는 곳은 `gen_batch()` 한 곳뿐이고,
+  `/generate`·`/generate_day` 둘 다 이 함수를 거친다.
+- FastAPI는 동기(`def`) 엔드포인트를 스레드풀에서 돌리므로, 요청 두 개가 겹치면
+  (React StrictMode의 effect 중복 실행, 사용자의 재시도, 동시 접속 등) 서로 다른
+  스레드가 **같은 전역 모델**을 동시에 호출한다.
+- GRU 셀의 `kernel`/`recurrent_kernel` 가중치는 **최초 호출 시 지연 빌드**되는데, 두
+  스레드의 빌드가 겹치면 한쪽이 미완성 상태의 셀을 쓰게 되면서 위 예외가 난다.
+
+**재현 확인**: 수정 전 코드에 동시 요청 8개를 보내자 7/8이 500으로 실패(로그에 같은
+`GRUCell`/`kernel` 예외 확인). 수정 후 같은 테스트를 5라운드(총 40회) 돌려 전부
+성공 — 우연이 아니라 이 레이스가 실제 원인이었음을 확인했다. **배포된 백엔드
+(kook-backend.onrender.com)에도 같은 버그가 살아있는 걸 확인**했다(동시 요청 6개 중
+4개 500).
+
+**수정**(`backend/app_core_FOOK.py`):
+- `gen_batch()`의 모델 호출 구간을 전역 `threading.Lock()`으로 직렬화.
+- 서버 기동 시 `gen_batch(n=2)`를 한 번 미리 호출해 지연 빌드를 단일 스레드 상태에서
+  끝내둠(n=1은 안 됨 — 함수 자체의 기존 제약, `tf.squeeze()`가 배치축까지 없애버림).
+
+**검증**(사용자가 요청한 체크리스트 그대로):
+- 같은 입력 5회 반복, `/generate` 후 `/generate_day`, `/generate_day` 연속 15~20회,
+  하루 생성 후 다시 한 끼 생성, 동시 요청 6~8개(원래 버그 재현 시나리오) — 로컬에서
+  전부 통과. 로컬 pytest 63개도 무변경 통과.
+- 회귀 테스트 스크립트 `backend/scripts/smoke_generate_day.py` 추가(CI 미포함,
+  실제 TF 모델이 필요해서 배포 전 수동 실행용). 위 체크리스트 전부 + 동시 요청
+  버스트를 코드로 재현한다.
+
+### 2) 보안 하드닝 3종
+- **Rate limit** 추가(`backend/rate_limit.py`, 새 의존성 없이 인메모리 슬라이딩
+  윈도우): `/auth/login`(5분 10회), `/auth/reset-password`(15분 5회),
+  `/recipe`·`/tts`·`/chat`(5분 20회, OpenAI 비용이 있는 엔드포인트). Render
+  무료플랜은 단일 프로세스라 인메모리로 충분 — 여러 인스턴스로 늘리면 Redis 등으로
+  바꿔야 한다.
+- **CORS 좁힘**: 기본값이 `https://.*\.vercel\.app`(모든 Vercel 앱 허용)이었던 걸
+  실제 배포 주소(`kook-omega.vercel.app`) + 로컬 개발 주소로 명시. 미리보기 배포를
+  테스트해야 하면 `CORS_ORIGIN_REGEX` 환경변수로 그때만 연다.
+- **`/health` 예외 노출 차단**: DB 점검 실패 시 `{'ok': False, 'error': str(e)}`로
+  실제 예외 메시지(DB 호스트·계정명이 섞여 나올 수 있음)를 그대로 돌려주던 걸
+  `{'ok': False}`로 바꾸고, 실제 메시지는 서버 로그에만 남긴다.
+- 비밀번호 재설정(이름+생년월일 확인)은 그대로 둔다 — README에 이미 "간소화 인증"으로
+  명시돼 있고, rate limit로 무차별 대입을 늦추는 정도가 이 프로젝트 규모에 맞는
+  선이라고 판단(OTP는 과함).
+
+### 3) 가벼운 API 검증 테스트 추가
+`server_FOOK.py`의 요청 스키마(Pydantic)들이 전부 파일 안에 있어서, 검증 로직만
+테스트하려 해도 `app_core_FOOK`(TF 모델 로딩, 수십 초)까지 딸려 들어오는 구조였다.
+`backend/schemas.py`로 요청 스키마를 분리(TF 무관)해서 이 문제를 없앴다.
+
+- `backend/schemas.py` — `SignupReq`/`LoginReq`/`GenReq`/`DayReq`/`HeightSexMixin`
+  등 요청 모델 전부 이동. `server_FOOK.py`는 여기서 import.
+- `backend/tests/test_api_validation.py` — 26개 케이스, TF 미로딩 상태로 0.5초 안에
+  끝남: 아이디/비밀번호 형식 검증, `HeightSexMixin`의 height+sex 동반 검증(이번
+  세션 이전에 고친 성별 조용한 오판 버그의 회귀 테스트), 생년월일 나이 계산,
+  `rate_limit.py`의 허용/차단/IP별 분리/윈도우 만료 동작.
+- `requirements-dev.txt`에 `fastapi`/`pydantic`/`httpx` 추가(여전히 TensorFlow는
+  제외 — CI가 무거워지지 않는다).
+
+### 검증
+- ✅ 로컬 pytest 63개 전부 통과(기존 37 + 신규 26), 0.5초.
+- ✅ 서버 부팅 확인, `/health` 응답에 `error` 필드 없음.
+- ✅ CORS: `kook-omega.vercel.app`·`localhost:5173`은 허용, 임의의 다른
+  `*.vercel.app`은 차단(preflight 400) 확인.
+- ✅ `/auth/login`에 11번째 요청부터 429 확인(레이트리밋 동작), `Retry-After`
+  헤더 포함.
+- ✅ `smoke_generate_day.py` 전체 재실행(5), `/generate`의 `HeightSexMixin` 검증도
+  실제 API로 재확인(6, `schemas.py` 분리 후에도 동일하게 동작).
+
+---
+
 ## v21 업데이트 — App.tsx 구조 정리 3차-c3: `pages/recipe/` (레시피, PDF) — 3차 리팩터링 종료
 
 3차-c의 마지막 묶음이자, App.tsx를 `pages/`·`components/`로 나누는 3단계

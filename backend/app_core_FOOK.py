@@ -14,7 +14,7 @@ app_core_FOOK.py — 투석 한끼 앱 코어 (생성 → resample → 레버조
   cd /d E:\\final
   python app_core_FOOK.py
 """
-import os, sys, copy
+import os, sys, copy, threading
 os.environ.setdefault('TF_USE_LEGACY_KERAS', '1')
 os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
 from collections import Counter, defaultdict
@@ -304,6 +304,16 @@ print('준비 완료.\n')
 
 
 # ---------------- 앵커링 생성 ----------------
+# FastAPI는 동기 엔드포인트를 스레드풀에서 돌리므로, 동시에 들어온 요청 두 개가
+# 이 함수를 동시에 호출하면 전역으로 공유하는 gen(encoder/decoder) 모델을 두 스레드가
+# 동시에 건드리게 된다. TF/Keras 레이어는 이런 동시 호출에 안전하다고 보장되지 않고,
+# 특히 최초 호출 시 지연 빌드(build)되는 GRU 셀의 kernel 가중치가 두 스레드의 빌드가
+# 겹치면서 일부만 생성된 채로 쓰이는 레이스가 실제로 재현됐다
+# ("'GRUCell' object has no attribute 'kernel'"). 배치 크기가 작고(seed 12~48개,
+# 5스텝) 락을 걸어도 지연은 무시할 만해서, 정확성을 위해 전역 락으로 직렬화한다.
+_GEN_LOCK = threading.Lock()
+
+
 def gen_batch(anchor_menu=None, n=12, temp=0.8):
     """seed=랜덤 실제한끼 n개. anchor_menu 있으면 그 슬롯 고정 후 나머지 샘플. (batch>1 필수: squeeze 회피)"""
     idx = np.random.randint(diet_np.shape[0], size=n)
@@ -314,36 +324,45 @@ def gen_batch(anchor_menu=None, n=12, temp=0.8):
         seeds[:, s + 1] = name2idx[anchor_menu]
         fixed[s] = name2idx[anchor_menu]
 
-    enc_hidden = tf.zeros([n, gen.encoder.units])
-    enc_output, enc_hidden = gen.encoder(seeds, enc_hidden)
-    dec_hidden = copy.deepcopy(enc_hidden)
-    res = np.zeros((n, 7), dtype=int); res[:, 0] = seeds[:, 0]; res[:, -1] = 826
-    used = [set(fixed.values()) for _ in range(n)]
-    used_grp = [{TOK_GRP[t] for t in fixed.values() if t in TOK_GRP} for _ in range(n)]
-    for j in range(5):                       # slot s=j → position j+1
-        outputs, dec_hidden, _ = gen.decoder(seeds[:, j], dec_hidden, enc_output)
-        probs = np.array(outputs, dtype=float)
-        if probs.ndim == 1:
-            probs = probs[None, :]
-        for b in range(n):
-            if j in fixed:
-                res[b, j + 1] = fixed[j]; continue
-            p = probs[b].copy()
-            for t in SPECIAL: p[t] = 0.0
-            for t in BLOCK_TOK: p[t] = 0.0        # 김치주재료 메뉴 생성 금지
-            for t in used[b]: p[t] = 0.0
-            masked = p * SLOT_OK[j]                       # 슬롯 허용 카테고리
-            for gi in used_grp[b]:                        # 밥/국/김치 중복 금지
-                masked[GRP_TOK[gi]] = 0.0
-            if masked.sum() > 0:
-                p = masked
-            p = np.clip(p, 1e-12, None); p = p ** (1.0 / temp); p /= p.sum()
-            tok = int(np.random.choice(len(p), p=p))
-            res[b, j + 1] = tok; used[b].add(tok)
-            gi = TOK_GRP.get(tok)
-            if gi is not None:
-                used_grp[b].add(gi)
+    with _GEN_LOCK:
+        enc_hidden = tf.zeros([n, gen.encoder.units])
+        enc_output, enc_hidden = gen.encoder(seeds, enc_hidden)
+        dec_hidden = copy.deepcopy(enc_hidden)
+        res = np.zeros((n, 7), dtype=int); res[:, 0] = seeds[:, 0]; res[:, -1] = 826
+        used = [set(fixed.values()) for _ in range(n)]
+        used_grp = [{TOK_GRP[t] for t in fixed.values() if t in TOK_GRP} for _ in range(n)]
+        for j in range(5):                       # slot s=j → position j+1
+            outputs, dec_hidden, _ = gen.decoder(seeds[:, j], dec_hidden, enc_output)
+            probs = np.array(outputs, dtype=float)
+            if probs.ndim == 1:
+                probs = probs[None, :]
+            for b in range(n):
+                if j in fixed:
+                    res[b, j + 1] = fixed[j]; continue
+                p = probs[b].copy()
+                for t in SPECIAL: p[t] = 0.0
+                for t in BLOCK_TOK: p[t] = 0.0        # 김치주재료 메뉴 생성 금지
+                for t in used[b]: p[t] = 0.0
+                masked = p * SLOT_OK[j]                       # 슬롯 허용 카테고리
+                for gi in used_grp[b]:                        # 밥/국/김치 중복 금지
+                    masked[GRP_TOK[gi]] = 0.0
+                if masked.sum() > 0:
+                    p = masked
+                p = np.clip(p, 1e-12, None); p = p ** (1.0 / temp); p /= p.sum()
+                tok = int(np.random.choice(len(p), p=p))
+                res[b, j + 1] = tok; used[b].add(tok)
+                gi = TOK_GRP.get(tok)
+                if gi is not None:
+                    used_grp[b].add(gi)
     return [[food_dict[int(t)] for t in r if int(t) not in SPECIAL] for r in res]
+
+
+# 서버가 요청을 받기 전에 한 번 미리 호출해서, encoder/decoder GRU의 지연 빌드(kernel
+# 가중치 생성)를 단일 스레드 상태에서 끝내둔다. 이렇게 안 하면 배포 직후 첫 실제 요청이
+# (동시 요청이 아니어도) 빌드 시점과 겹쳐서 위와 같은 레이스를 유발할 수 있다.
+# n은 반드시 1보다 커야 한다 — n=1이면 Decoder.call()의 tf.squeeze()가 배치 축까지
+# 없애버려 다음 스텝의 Attention 레이어가 깨진다(gen_batch 자체의 기존 제약, 위 docstring 참고).
+gen_batch(n=2)
 
 
 # ---------------- 전체 플로우 ----------------

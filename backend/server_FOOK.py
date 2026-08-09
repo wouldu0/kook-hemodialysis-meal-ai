@@ -25,16 +25,20 @@ server_FOOK.py — FOOK 통합 백엔드 (FastAPI)
 """
 from __future__ import annotations
 import os, uuid
-from typing import Literal, Optional
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
-from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import text
 
 from database import db
 from auth_utils import hash_password, verify_password, issue_session, resolve_user
+from rate_limit import rate_limit
+from schemas import (
+    CartReq, ChatReq, DayReq, FindIdReq, GenReq, LoginReq,
+    ProfileReq, RecipeReq, ResetPasswordReq, SaveReq, SignupReq, TTSReq,
+)
 
 # ── AI 생성 엔진 로딩 (import 시 TF 모델 1회 로딩 — 수십 초 소요) ──────────────
 os.environ.setdefault('TF_USE_LEGACY_KERAS', '1')
@@ -46,12 +50,15 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 import app_core_FOOK as core
 
 app = FastAPI(title='FOOK 통합 API', version='10.0.0')
+# 실제 배포 프론트 주소만 명시적으로 허용한다. 예전엔 *.vercel.app 전체를 정규식으로
+# 열어뒀는데(미리보기 배포 주소가 매번 바뀌는 걸 신경 안 쓰려는 목적), 그러면 이 API가
+# 임의의 다른 Vercel 프로젝트에서도 크레덴셜 포함 요청을 보낼 수 있게 돼 필요 이상으로 넓다.
+# 미리보기 배포를 테스트해야 하면 Render 환경변수 CORS_ORIGIN_REGEX로 그때만 열면 된다.
 origins = [x.strip() for x in os.getenv(
-    'CORS_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173'
+    'CORS_ORIGINS',
+    'https://kook-omega.vercel.app,http://localhost:5173,http://127.0.0.1:5173'
 ).split(',') if x.strip()]
-# Vercel은 배포할 때마다 미리보기 주소(kook-xxxx-seungwoo.vercel.app)가 새로 생긴다.
-# 주소를 매번 등록할 수 없으므로 *.vercel.app 은 정규식으로 한 번에 허용한다.
-origin_regex = os.getenv('CORS_ORIGIN_REGEX', r'https://.*\.vercel\.app')
+origin_regex = os.getenv('CORS_ORIGIN_REGEX') or None
 app.add_middleware(CORSMiddleware, allow_origins=origins,
                    allow_origin_regex=origin_regex, allow_credentials=True,
                    allow_methods=['*'], allow_headers=['*'])
@@ -84,35 +91,6 @@ def parse_consumed(raw):
         raise HTTPException(422, 'consumed 값은 모두 숫자여야 합니다.')
 
 
-import re
-
-USERNAME_RE = re.compile(r'^[a-zA-Z0-9_.\-]{4,30}$')
-
-
-def _validate_username(v: str) -> str:
-    v = v.strip()
-    if not USERNAME_RE.match(v):
-        raise ValueError('아이디는 영문/숫자/._- 조합 4~30자여야 합니다.')
-    return v
-
-
-# ────────────────────────── 요청 스키마 ──────────────────────────
-class SignupReq(BaseModel):
-    # 이메일 형식이 아니어도 되는 '아이디'. DB의 email 컬럼을 그대로 재사용하되
-    # 형식 검증(EmailStr)만 뺐다 — 마이그레이션 없이 기존 스키마 그대로 쓰기 위함.
-    username: str = Field(min_length=4, max_length=30)
-    password: str = Field(min_length=8, max_length=128)
-    name: str = Field(min_length=1, max_length=60)
-
-    def normalized(self) -> str:
-        return _validate_username(self.username)
-
-
-class LoginReq(BaseModel):
-    username: str
-    password: str
-
-
 def _parse_birthdate(raw: str):
     """'YYYY-MM-DD' 문자열 → date. 형식이 틀리면 422."""
     from datetime import date
@@ -128,113 +106,6 @@ def _age_from(b) -> Optional[int]:
     today = date.today()
     age = today.year - b.year - ((today.month, today.day) < (b.month, b.day))
     return age if 1 <= age <= 120 else None
-
-
-class FindIdReq(BaseModel):
-    """아이디 찾기 — 이메일 발송 수단이 없으므로 이름+생년월일로 본인 확인한다."""
-    name: str = Field(min_length=1, max_length=60)
-    birthdate: str
-
-
-class ResetPasswordReq(BaseModel):
-    """비밀번호 찾기 — 아이디+이름+생년월일이 모두 맞으면 새 비밀번호로 바로 재설정한다."""
-    username: str
-    name: str = Field(min_length=1, max_length=60)
-    birthdate: str
-    new_password: str = Field(min_length=8, max_length=128)
-
-
-class ProfileReq(BaseModel):
-    gender: Optional[str] = None
-    # 생년월일(YYYY-MM-DD)을 받아 서버에서 나이를 계산해 DB의 age 컬럼에 저장한다.
-    # age를 직접 보내는 것도 허용(하위호환) — 둘 다 오면 birthdate가 우선.
-    birthdate: Optional[str] = None
-    age: Optional[int] = Field(default=None, ge=1, le=120)
-    height: Optional[float] = Field(default=None, ge=50, le=250)
-    weight: Optional[float] = Field(default=None, ge=20, le=300)
-    dialysis: str = '혈액투석'
-
-    def computed_age(self) -> Optional[int]:
-        if self.birthdate:
-            try:
-                from datetime import date
-                y, m, d = (int(x) for x in self.birthdate.split('-'))
-                b = date(y, m, d)
-                today = date.today()
-                age = today.year - b.year - ((today.month, today.day) < (b.month, b.day))
-                if not (1 <= age <= 120):
-                    raise ValueError
-                return age
-            except Exception:
-                raise HTTPException(422, '생년월일 형식이 올바르지 않습니다 (YYYY-MM-DD).')
-        return self.age
-
-
-# F.standard_weight()는 sex가 '여' 계열이면 21, 그 외(None·오타 포함)는 전부 22(남성)로
-# 조용히 처리한다. height만 주고 sex를 빠뜨리거나 오타를 내면 성별이 잘못 가정된 채로
-# 표준체중·영양 목표가 계산될 수 있어, API 단에서 값 자체와 height 동반 여부를 막는다.
-_SEX_VALUES = ('남', '여', 'male', 'female')
-
-
-class HeightSexMixin(BaseModel):
-    height: Optional[float] = Field(default=None, ge=50, le=250)  # 키(cm)
-    sex: Optional[Literal['남', '여', 'male', 'female']] = None
-
-    @model_validator(mode='after')
-    def _height_requires_sex(self):
-        if self.height is not None and self.sex is None:
-            raise ValueError(
-                f"height를 주려면 sex도 함께 보내야 합니다 ({', '.join(_SEX_VALUES)} 중 하나). "
-                "표준체중 계산이 성별에 따라 달라지므로, 빠지면 남성 기준으로 잘못 계산될 수 있습니다."
-            )
-        return self
-
-
-class GenReq(HeightSexMixin):
-    menu: Optional[str] = None
-    ingredient: Optional[str] = None
-    weight: int = 60
-    consumed: Optional[dict] = None
-    meals_left: int = 3
-
-
-class DayReq(HeightSexMixin):
-    weight: int = 60
-    menus: Optional[list] = None
-    ingredients: Optional[list] = None
-
-
-class RecipeReq(BaseModel):
-    menu: str
-    ingredients: list
-    model: str = 'gpt-4o-mini'
-    source: Optional[str] = None
-
-
-class TTSReq(BaseModel):
-    text: str
-    voice: str = 'nova'
-
-
-class ChatReq(BaseModel):
-    question: str
-    weight: Optional[int] = None      # 체중(kg). consumed와 같이 주면 '오늘 남은 예산' 감안한 답변
-    consumed: Optional[dict] = None   # 오늘 이미 먹은 누적 (generate 응답의 intake와 동일 형식)
-    meals_left: Optional[int] = None  # 오늘 남은 끼니 수(이번 것 포함). 있으면 하루 전체가 아니라
-                                       # '다음 한 끼 몫'(남은예산÷남은끼니)으로 비교 — generate와 동일 개념
-
-
-class SaveReq(BaseModel):
-    title: str
-    subtitle: Optional[str] = None
-    payload: dict = {}
-
-
-class CartReq(BaseModel):
-    name: str
-    amount: Optional[float] = None
-    unit: str = 'g'
-    checked: bool = False
 
 
 # user_profiles.birthdate 는 002_account_recovery.sql 에서 추가되는 컬럼이다.
@@ -271,7 +142,10 @@ def health():
             conn.execute(text('select 1'))
         db_info = {'ok': True}
     except Exception as e:
-        db_info = {'ok': False, 'error': str(e)}
+        # 실제 예외 메시지(DB 호스트·계정명 등이 섞여 나올 수 있음)는 서버 로그에만 남기고,
+        # 인증 없이 누구나 호출 가능한 /health 응답에는 내려보내지 않는다.
+        print(f'/health DB 점검 실패: {e}')
+        db_info = {'ok': False}
     return {
         'ok': db_info['ok'],
         'version': '10.0.0',
@@ -299,7 +173,7 @@ def signup(req: SignupReq):
     return {'token': token, 'user': {'id': uid, 'username': username, 'name': req.name.strip()}}
 
 
-@app.post('/auth/login')
+@app.post('/auth/login', dependencies=[Depends(rate_limit('login', 10, 300))])
 def login(req: LoginReq):
     username = req.username.strip()
     with db() as conn:
@@ -337,7 +211,10 @@ def me(user=Depends(bearer)):
 
 @app.put('/me/profile')
 def update_profile(req: ProfileReq, user=Depends(bearer)):
-    age = req.computed_age()
+    try:
+        age = req.computed_age()
+    except ValueError as e:
+        raise HTTPException(422, str(e))
     # 생년월일 원본도 보관한다 — 아이디/비밀번호 찾기의 본인 확인 근거로 쓰인다.
     birth = _parse_birthdate(req.birthdate) if req.birthdate else None
     with db() as conn:
@@ -371,7 +248,7 @@ def find_id(req: FindIdReq):
             'joined_at': [r['created_at'].date().isoformat() for r in rows]}
 
 
-@app.post('/auth/reset-password')
+@app.post('/auth/reset-password', dependencies=[Depends(rate_limit('reset-password', 5, 900))])
 def reset_password(req: ResetPasswordReq):
     birth = _parse_birthdate(req.birthdate)
     username = req.username.strip()
@@ -447,7 +324,7 @@ def generate_day(req: DayReq):
                            menus=clean(req.menus), ingredients=clean(req.ingredients))
 
 
-@app.post('/recipe')
+@app.post('/recipe', dependencies=[Depends(rate_limit('recipe', 20, 300))])
 def recipe(req: RecipeReq):
     """완성 한끼의 특정 메뉴 조리법을 LLM으로 편집(원본기반+투석팁). OPENAI_API_KEY 필요."""
     import recipe_editor_FOOK as R
@@ -459,7 +336,7 @@ def recipe(req: RecipeReq):
         return {'menu': req.menu, 'error': str(e)}
 
 
-@app.post('/tts')
+@app.post('/tts', dependencies=[Depends(rate_limit('tts', 20, 300))])
 def tts(req: TTSReq):
     """조리과정 텍스트를 음성(mp3)으로 변환. OPENAI_API_KEY 필요."""
     import recipe_editor_FOOK as R
@@ -470,7 +347,7 @@ def tts(req: TTSReq):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.post('/chat')
+@app.post('/chat', dependencies=[Depends(rate_limit('chat', 20, 300))])
 def chat(req: ChatReq):
     """투석·콩팥병 영양 질문에 답하는 RAG 챗봇 (대한신장학회 자료 등 근거). OPENAI_API_KEY 필요.
     weight+consumed(오늘 이미 먹은 양, /generate 응답의 intake)를 같이 주면 '오늘 남은 예산' 감안한

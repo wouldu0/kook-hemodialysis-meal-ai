@@ -1,6 +1,11 @@
 # CI에서 tests/를 돌리기 위한 최소 의존성.
 # 일부러 requirements.txt(TensorFlow 등 전체 서버 의존성)를 포함하지 않습니다 —
-# tests/test_adjust_levers.py는 순수 함수만 다뤄서 openpyxl 정도만 있으면 됩니다.
+# test_adjust_levers.py는 순수 함수만 다뤄서 openpyxl 정도만 있으면 되고,
+# test_api_validation.py(schemas.py, rate_limit.py)도 app_core_FOOK(TF 모델 로딩)을
+# import하지 않으므로 fastapi/pydantic/httpx만 있으면 됩니다(TensorFlow는 불필요).
 # 설치: pip install -r requirements-dev.txt
 pytest==8.3.4
 openpyxl==3.1.5
+fastapi==0.116.1
+pydantic[email]==2.11.7
+httpx==0.28.1
