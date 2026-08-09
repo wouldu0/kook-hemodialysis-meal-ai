@@ -382,7 +382,7 @@
    배율과 무관하게 그림 위 같은 자리에 붙어 있는다. */
 .splash-frame {
   --splash-ar: 2.108;   /* onboarding-home.png = 864 x 1821 */
-  --splash-scale: .88;
+  --splash-scale: 1;
   position: relative;
   flex: none;                        /* flex가 임의로 줄이지 못하게 */
   width: calc(
