@@ -4,6 +4,36 @@
 
 ---
 
+## v14 업데이트 — v13 리뷰 후속: `?api=` 도메인 allowlist, fetch 전량 일원화
+
+v13 반영 후 같은 리뷰어가 다시 대조 검증한 결과, "부분 수정"으로 남아있던 2건.
+
+### 1) `?api=` 백엔드 우회 — https 검증만으론 부족하다는 지적
+- v13에서 https-only + confirm() 동의로 막았지만, "동의만 누르면 결국 임의 주소로 토큰이
+  간다"는 구조적 위험은 남아있다는 지적. `isValidApiOverride()`에 도메인 allowlist를
+  추가해서 `*.onrender.com`(실제 배포처)·`*.trycloudflare.com`(비상용 예시로 문서에
+  적어둔 제공자)이 아닌 호스트는 https여도 confirm() 단계까지 가지 않고 거른다.
+  임의의 공격자 도메인은 이제 애초에 후보가 안 된다.
+
+### 2) `App.tsx`가 여전히 `services/api.ts`를 거치지 않고 직접 fetch하던 8곳
+- `services/api.ts` 상단 주석은 "화면 컴포넌트들은 이 모듈만 통해 서버와 이야기한다"고
+  적혀 있었는데, 실제로는 `/health`, `/menus`, `/ingredients`, `/menus_by_ingredient`,
+  `/generate`, `/recipe`, `/generate_day`, `/tts`, `/veg_potassium_tips` — 8개 호출이
+  `apiFetch()`를 거치지 않고 직접 `fetch()`를 쓰고 있어서 주석과 실제 코드가 안 맞았다.
+- `apiFetch()`에 `timeoutMs`(엔드포인트별로 다른 타임아웃, 예: `/generate_day`는
+  90초)와 `responseType: 'blob'`(`/tts`는 오디오 파일이라 JSON 파싱이 안 됨) 옵션을
+  추가해서, 8곳 전부를 `apiFetch()` 하나로 통일했다. 이제 인증 헤더·타임아웃·에러 메시지
+  파싱이 모든 API 호출에서 동일하게 동작한다.
+
+### 검증
+- ✅ 프론트 `npm run build`(tsc+vite) 통과
+- ✅ 백엔드 pytest 37개 통과(무변경)
+- ✅ 로컬 백엔드+프론트를 띄우고 실제 클릭으로 8개 엔드포인트 전부 확인: 메뉴/재료 검색,
+  재료로 메뉴 찾기, 한 끼 생성, 레시피 조회(OPENAI_API_KEY 없을 때 에러 처리까지),
+  하루 세 끼 생성(`/generate_day`), 칼륨 낮추는 팁, `/tts`(키 없을 때 400) 응답 확인
+
+---
+
 ## v13 업데이트 — 공개 배포 전 보안 점검 반영 (외부 리뷰 7건)
 
 외부 코드 리뷰로 받은 7개 지적사항을 하나씩 실제 코드와 대조 검증한 뒤 반영했다.

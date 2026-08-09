@@ -23,13 +23,11 @@ import type {
   SavedItem,
 } from "./types";
 import {
-  API,
   addSaved,
   apiFetch,
   authToken,
   currentUser,
   deleteEverywhere,
-  isValidApiOverride,
   loadEverywhere,
   saveEverywhere,
   saveSession,
@@ -336,13 +334,12 @@ function useSpeech() {
     }
     setSpeaking(true);
     try {
-      const r = await fetch(`${API}/tts`, {
+      const blob = await apiFetch("/tts", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: clean }),
+        responseType: "blob",
       });
-      if (!r.ok) throw new Error();
-      const audio = new Audio(URL.createObjectURL(await r.blob()));
+      const audio = new Audio(URL.createObjectURL(blob));
       audioRef.current = audio;
       audio.onended = () => setSpeaking(false);
       await audio.play();
@@ -490,7 +487,7 @@ function App() {
   // 무료 호스팅 백엔드는 한동안 요청이 없으면 잠든다. 사용자가 소개 화면을
   // 넘기는 동안 미리 깨워두면, 회원가입/로그인 차례에는 이미 준비된 상태가 된다.
   useEffect(() => {
-    fetch(`${API}/health`).catch(() => {});
+    apiFetch("/health").catch(() => {});
   }, []);
   const [profile, setProfile] = useState(initialProfile);
   const [plan, setPlan] = useState<Plan>(fallbackPlan);
@@ -1726,11 +1723,7 @@ function Home() {
   const [randomAsk, setRandomAsk] = useState(false);
   const user = currentUser();
   useEffect(() => {
-    const api = API;
-    Promise.all([
-      fetch(`${api}/menus`).then((r) => r.json()),
-      fetch(`${api}/ingredients`).then((r) => r.json()),
-    ])
+    Promise.all([apiFetch("/menus"), apiFetch("/ingredients")])
       .then(([m, i]) => {
         setMenuList(m.menus || []);
         setIngList(i.ingredients || []);
@@ -1762,8 +1755,7 @@ function Home() {
     setIngQuery(ing);
     setIngMenus(null);
     setIngLoading(true);
-    fetch(`${API}/menus_by_ingredient?q=${encodeURIComponent(ing)}`)
-      .then((r) => r.json())
+    apiFetch(`/menus_by_ingredient?q=${encodeURIComponent(ing)}`)
       .then((d) => setIngMenus(d.menus || []))
       .catch(() => setIngMenus([]))
       .finally(() => setIngLoading(false));
@@ -2032,7 +2024,6 @@ function Generating() {
       1400,
     );
     const run = async () => {
-      const api = API;
       const body: any = { weight: Number(profile.weight) || 60, meals_left: 3 };
       // 백엔드가 height와 sex를 항상 같이 요구한다(표준체중 계산에 성별이 필요).
       // 둘을 독립된 조건으로 보내면 gender가 비어있을 때 height만 보내 422가 나므로 묶는다.
@@ -2043,18 +2034,12 @@ function Generating() {
       if (searchMode === "menu" && query.trim()) body.menu = query.trim();
       if (searchMode === "ingredient" && query.trim())
         body.ingredient = query.trim();
-      const controller = new AbortController();
-      const tid = setTimeout(() => controller.abort(), 60000);
       try {
-        const r = await fetch(`${api}/generate`, {
+        const d = await apiFetch("/generate", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
-          signal: controller.signal,
+          timeoutMs: 60000,
         });
-        clearTimeout(tid);
-        if (!r.ok) throw new Error(await r.text());
-        const d = await r.json();
         if (!live) return;
         setS(4);
         setUsingFallback(false);
@@ -2068,7 +2053,6 @@ function Generating() {
         setPlan(p);
         setTimeout(() => live && nav("/meal"), 500);
       } catch (e) {
-        clearTimeout(tid);
         if (!live) return;
         setError(
           "서버에 연결하지 못해 내장 예시 데이터로 진행합니다. 백엔드 서버가 켜져 있는지 확인해주세요.",
@@ -2879,16 +2863,14 @@ function RecipeBody({ menuName }: { menuName: string }) {
     if (!serverIngredients || !serverIngredients.length) return;
     let live = true;
     setLoadingRecipe(true);
-    fetch(`${API}/recipe`, {
+    apiFetch("/recipe", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         menu: menuName,
         ingredients: serverIngredients,
         source: recipeSourceName,
       }),
     })
-      .then((r) => r.json())
       .then((d) => {
         if (!live) return;
         if (d.error) setRecipeError(d.error);
@@ -3197,22 +3179,14 @@ function DayPlan() {
       body.height = Number(profile.height);
       body.sex = profile.gender === "남성" ? "남" : "여";
     }
-    const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), 90000);
-    fetch(`${API}/generate_day`, {
+    apiFetch("/generate_day", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-      signal: controller.signal,
+      timeoutMs: 90000,
     })
-      .then((r) => {
-        if (!r.ok) throw new Error("하루 식단을 만들지 못했어요.");
-        return r.json();
-      })
       .then((d) => live && setData(d))
       .catch(() => live && setError("서버에 연결하지 못했어요. 백엔드가 켜져 있는지 확인해주세요."))
       .finally(() => {
-        clearTimeout(tid);
         if (live) setLoading(false);
       });
     return () => {
@@ -3291,8 +3265,7 @@ function Tips() {
   >(null);
   const [error, setError] = useState("");
   useEffect(() => {
-    fetch(`${API}/veg_potassium_tips`)
-      .then((r) => r.json())
+    apiFetch("/veg_potassium_tips")
       .then((d) => setTips(d.tips || []))
       .catch(() => setError("팁을 불러오지 못했어요."));
   }, []);

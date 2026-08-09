@@ -24,12 +24,20 @@ export const storage = {
 //
 // ⚠️ 보안: 이 값을 그대로 신뢰하면 안 된다 — apiFetch()가 로그인 토큰을
 // `Authorization: Bearer ...`로 이 주소에 보내므로, 누군가 조작한 링크(?api=공격자서버)를
-// 열면 로그인 세션이 그쪽으로 새어나갈 수 있다. 그래서 (1) https만 허용하고
-// (2) 실제로 바뀔 때만 confirm()으로 주소를 보여주고 동의를 받은 뒤 저장한다.
+// 열면 로그인 세션이 그쪽으로 새어나갈 수 있다. 그래서 세 겹으로 막는다:
+// (1) https만 허용 (2) 호스트가 실제로 쓰는 호스팅 제공자 도메인(Render·Cloudflare
+// Quick Tunnel)에 속할 때만 허용 — 완전히 임의의 공격자 도메인은 여기서 막힌다.
+// (3) 그래도 실제로 바뀔 때만 confirm()으로 주소를 보여주고 동의를 받은 뒤 저장한다.
+const ALLOWED_API_HOST_SUFFIXES = [".onrender.com", ".trycloudflare.com"];
 export function isValidApiOverride(raw: string): string | null {
   try {
     const url = new URL(raw);
     if (url.protocol !== "https:") return null;
+    const host = url.hostname.toLowerCase();
+    const allowed = ALLOWED_API_HOST_SUFFIXES.some(
+      (suffix) => host === suffix.slice(1) || host.endsWith(suffix),
+    );
+    if (!allowed) return null;
     return raw.replace(/\/+$/, "");
   } catch {
     return null;
@@ -68,19 +76,27 @@ export const API = (() => {
 export const currentUser = () => storage.get<SavedUser | null>("fook:user", null);
 export const authToken = () => localStorage.getItem("fook:token") || "";
 
-export async function apiFetch(path: string, options: RequestInit = {}) {
-  const headers = new Headers(options.headers || {});
-  if (!headers.has("Content-Type") && options.body)
+export type ApiFetchOptions = RequestInit & {
+  // 대부분 응답은 JSON이지만 /tts는 오디오(mp3)를 blob으로 돌려준다.
+  responseType?: "json" | "blob";
+  // /generate_day처럼 유난히 느린 엔드포인트는 기본 타임아웃(75초)보다 더 여유를 준다.
+  timeoutMs?: number;
+};
+
+export async function apiFetch(path: string, options: ApiFetchOptions = {}) {
+  const { responseType = "json", timeoutMs = 75000, ...init } = options;
+  const headers = new Headers(init.headers || {});
+  if (!headers.has("Content-Type") && init.body)
     headers.set("Content-Type", "application/json");
   const token = authToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
   const controller = new AbortController();
   // 무료 호스팅은 요청이 없으면 잠들고, 깨어나는 데 1분 가까이 걸린다.
   // 12초로 끊으면 잠든 직후의 첫 요청이 무조건 실패하므로 넉넉히 잡는다.
-  const tid = setTimeout(() => controller.abort(), 75000);
+  const tid = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const r = await fetch(`${API}${path}`, {
-      ...options,
+      ...init,
       headers,
       signal: controller.signal,
     });
@@ -93,6 +109,7 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
       } catch {}
       throw new Error(msg);
     }
+    if (responseType === "blob") return r.blob();
     return r.status === 204 ? null : r.json();
   } catch (e: any) {
     clearTimeout(tid);
