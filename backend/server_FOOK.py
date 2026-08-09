@@ -56,7 +56,7 @@ app = FastAPI(title='FOOK 통합 API', version='10.0.0')
 # 미리보기 배포를 테스트해야 하면 Render 환경변수 CORS_ORIGIN_REGEX로 그때만 열면 된다.
 origins = [x.strip() for x in os.getenv(
     'CORS_ORIGINS',
-    'https://kook-omega.vercel.app,http://localhost:5173,http://127.0.0.1:5173'
+    'https://kook-hemodialysis-meal-ai.vercel.app,http://localhost:5173,http://127.0.0.1:5173'
 ).split(',') if x.strip()]
 origin_regex = os.getenv('CORS_ORIGIN_REGEX') or None
 app.add_middleware(CORSMiddleware, allow_origins=origins,
