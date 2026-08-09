@@ -1,0 +1,6 @@
+# CI에서 tests/를 돌리기 위한 최소 의존성.
+# 일부러 requirements.txt(TensorFlow 등 전체 서버 의존성)를 포함하지 않습니다 —
+# tests/test_adjust_levers.py는 순수 함수만 다뤄서 openpyxl 정도만 있으면 됩니다.
+# 설치: pip install -r requirements-dev.txt
+pytest==8.3.4
+openpyxl==3.1.5

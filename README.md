@@ -341,6 +341,8 @@ KOOK/
 │   │       └── ckpt-1.data-00000-of-00001       # ⭐ 강화학습 체크포인트
 │   │
 │   ├── 📂 Exploiting-Food-Embeddings-.../       # 재료 대체 임베딩
+│   ├── 📂 tests/                                # pytest — 순수 함수만(TF 모델 로딩 없음)
+│   ├── requirements-dev.txt                     # CI용 최소 의존성(pytest + openpyxl)
 │   └── 식약청_영양성분10.4(수정).xlsx              # 영양성분 DB
 │
 ├── 📂 model-development/                        # 🔬 AI 엔진 개발·검증 이력 (배포 미포함)
@@ -353,8 +355,11 @@ KOOK/
 │
 ├── 📂 frontend/                                 # React 앱
 │   ├── 📂 src/
-│   │   ├── App.tsx                              # 🎨 전체 화면 · 라우팅 · API 호출
-│   │   ├── fookData.ts                          # 화면용 상수 · 예시 데이터
+│   │   ├── App.tsx                              # 🎨 화면 컴포넌트 · 라우팅
+│   │   ├── types.ts                             # 공용 타입 (ApiResult 등 서버 응답 형태 포함)
+│   │   ├── 📂 services/api.ts                   # 백엔드 통신 + 로컬↔서버 동기화
+│   │   ├── 📂 hooks/useApp.ts                   # AppContext/useApp
+│   │   ├── fookData.ts                          # 서버 미연결 시 폴백용 예시 데이터
 │   │   ├── mockup.css                           # 화면 디자인
 │   │   ├── fluid.css                            # 📱 휴대폰 크기별 유동 대응
 │   │   └── styles.css
@@ -368,8 +373,9 @@ KOOK/
 │   └── package.json
 │
 ├── 📂 docs/
-│   └── DEVLOG.md                                # 개발 변경 이력 (v11 등)
+│   └── DEVLOG.md                                # 개발 변경 이력 (v13 등)
 │
+├── 📂 .github/workflows/ci.yml                  # 백엔드 pytest + 프론트 빌드 (모델 로딩 없음)
 └── render.yaml                                  # Render 배포 설계도
 ```
 
@@ -412,8 +418,8 @@ KOOK/
 
 **1️⃣ 클론**
 ```bash
-git clone https://github.com/wouldu0/final_KOOK.git
-cd final_KOOK
+git clone https://github.com/wouldu0/kook-hemodialysis-meal-ai.git
+cd kook-hemodialysis-meal-ai
 ```
 
 **2️⃣ 백엔드 — 가상환경 및 패키지**
@@ -474,10 +480,19 @@ https://kook-omega.vercel.app/?api=https://다른-백엔드-주소
 
 원래대로 돌리려면 `?api=reset` 으로 접속합니다.
 
+> ⚠️ 로그인 토큰이 이 주소로 전송되므로, `https://`만 허용하고 브라우저 확인창(`confirm`)에
+> 전환할 주소를 보여준 뒤 동의해야만 저장됩니다 — 조작된 링크를 실수로 열어도 자동으로
+> 다른 서버로 세션이 새어나가지 않습니다.
+
 ---
 
 > ⚠️ 본 서비스는 **의료 진단이나 처방을 대체하지 않습니다.**
 > 생성된 식단은 참고용이며, 실제 식이요법은 반드시 담당 의료진·임상영양사와 상의하세요.
+>
+> ⚠️ **아이디/비밀번호 찾기는 데모 환경 기준의 간소화된 인증입니다.** 이메일·SMS 발송
+> 수단이 없어 이름+생년월일 확인만으로 처리합니다(비밀번호 자체는 PBKDF2-SHA256
+> 310,000회 + 랜덤 salt로 해싱, 세션 토큰도 해시로 저장). 실제 서비스로 운영한다면
+> 이메일/SMS OTP 같은 별도 인증 수단이 필요합니다.
 
 ---
 

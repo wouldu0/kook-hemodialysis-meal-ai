@@ -25,12 +25,12 @@ server_FOOK.py — FOOK 통합 백엔드 (FastAPI)
 """
 from __future__ import annotations
 import os, uuid
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import text
 
 from database import db
@@ -170,20 +170,36 @@ class ProfileReq(BaseModel):
         return self.age
 
 
-class GenReq(BaseModel):
+# F.standard_weight()는 sex가 '여' 계열이면 21, 그 외(None·오타 포함)는 전부 22(남성)로
+# 조용히 처리한다. height만 주고 sex를 빠뜨리거나 오타를 내면 성별이 잘못 가정된 채로
+# 표준체중·영양 목표가 계산될 수 있어, API 단에서 값 자체와 height 동반 여부를 막는다.
+_SEX_VALUES = ('남', '여', 'male', 'female')
+
+
+class HeightSexMixin(BaseModel):
+    height: Optional[float] = Field(default=None, ge=50, le=250)  # 키(cm)
+    sex: Optional[Literal['남', '여', 'male', 'female']] = None
+
+    @model_validator(mode='after')
+    def _height_requires_sex(self):
+        if self.height is not None and self.sex is None:
+            raise ValueError(
+                f"height를 주려면 sex도 함께 보내야 합니다 ({', '.join(_SEX_VALUES)} 중 하나). "
+                "표준체중 계산이 성별에 따라 달라지므로, 빠지면 남성 기준으로 잘못 계산될 수 있습니다."
+            )
+        return self
+
+
+class GenReq(HeightSexMixin):
     menu: Optional[str] = None
     ingredient: Optional[str] = None
     weight: int = 60
-    height: Optional[float] = None      # 키(cm)
-    sex: Optional[str] = None           # '남'/'여' (또는 male/female)
     consumed: Optional[dict] = None
     meals_left: int = 3
 
 
-class DayReq(BaseModel):
+class DayReq(HeightSexMixin):
     weight: int = 60
-    height: Optional[float] = None
-    sex: Optional[str] = None
     menus: Optional[list] = None
     ingredients: Optional[list] = None
 

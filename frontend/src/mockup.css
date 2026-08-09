@@ -460,6 +460,8 @@ body { background: var(--paper); }
 .nutri-card.ok { background: #eef6ea; border-color: #cfe3c5; }
 .nutri-card.over { background: #fdeceb; border-color: #f3c7c1; }
 .nutri-card.under { background: #eef4fb; border-color: #c9dcef; }
+/* 서버 미연결 시 내장 예시 데이터임을 표시 — 적절/초과 색과 헷갈리지 않게 중립 회색으로 */
+.nutri-card.demo { background: #f2f1ee; border-color: #ddd9d0; }
 .nutri-icon { font-size: 24px; text-align: center; }
 .nutri-body { min-width: 0; }
 .nutri-name { display: block; font-size: 13px; font-weight: 800; color: var(--muted); }
@@ -472,6 +474,16 @@ body { background: var(--paper); }
 .nutri-badge.ok { background: var(--g); }
 .nutri-badge.over { background: var(--over); }
 .nutri-badge.under { background: var(--under); }
+.nutri-badge.demo { background: #8a8378; }
+
+/* 서버 미연결로 예시 데이터를 보여줄 때 화면 상단에 계속 뜨는 배너 */
+.fallback-banner { margin-top: 0; margin-bottom: 16px; }
+
+/* PDF 문서 안에 남기는 예시 데이터 안내 — 다운로드된 파일만 봐도 알 수 있어야 한다 */
+.pdf-fallback-notice {
+  margin: 10px 0; padding: 8px 10px; border-radius: 8px;
+  background: #fdf1e4; color: #8a5a1f; font-size: 11px; font-weight: 700;
+}
 
 /* ── 하단 안내 카드 (노란 배경) ── */
 .notice-card {

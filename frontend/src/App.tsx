@@ -1,7 +1,5 @@
 import {
   Component,
-  createContext,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -15,42 +13,29 @@ import {
   useParams,
 } from "react-router-dom";
 import { dietPlans, ingredientData, menuData } from "./fookData";
-
-type Profile = {
-  gender: string;
-  birthdate: string; // YYYY-MM-DD. age는 여기서 계산해서 화면에만 보여준다.
-  age: string;
-  height: string;
-  weight: string;
-  dialysis: "혈액투석";
-};
-type MenuRecord = {
-  name: string;
-  ingredients: readonly string[];
-  steps: readonly string[];
-  nutrition: {
-    energy: number;
-    protein: number;
-    potassium: number;
-    phosphorus: number;
-    sodium: number;
-  };
-};
-type Plan = { id: string; day: number; slot: string; menus: readonly string[] };
-type NutrientKey = "energy" | "protein" | "phosphorus" | "potassium" | "sodium";
-type ApiResult = any;
-type AppState = {
-  profile: Profile;
-  setProfile: (p: Profile) => void;
-  plan: Plan;
-  setPlan: (p: Plan) => void;
-  query: string;
-  setQuery: (q: string) => void;
-  searchMode: "menu" | "ingredient" | "random";
-  setSearchMode: (m: "menu" | "ingredient" | "random") => void;
-  apiResult: ApiResult | null;
-  setApiResult: (r: ApiResult | null) => void;
-};
+import type {
+  ApiResult,
+  MealTime,
+  MenuRecord,
+  NutrientKey,
+  Plan,
+  Profile,
+  SavedItem,
+} from "./types";
+import {
+  API,
+  addSaved,
+  apiFetch,
+  authToken,
+  currentUser,
+  deleteEverywhere,
+  isValidApiOverride,
+  loadEverywhere,
+  saveEverywhere,
+  saveSession,
+  storage,
+} from "./services/api";
+import { AppContext, useApp } from "./hooks/useApp";
 
 const initialProfile: Profile = {
   gender: "여성",
@@ -79,15 +64,7 @@ const menuMap = new Map(menuData.map((m) => [m.name, m as MenuRecord]));
 const fallbackPlan =
   (dietPlans.find((p) => p.menus.includes("시금치된장국")) as Plan) ||
   (dietPlans[0] as Plan);
-const AppContext = createContext<AppState | null>(null);
-const useApp = () => {
-  const v = useContext(AppContext);
-  if (!v) throw new Error("AppContext missing");
-  return v;
-};
-type SavedUser = { id: string; username: string; name: string };
 // 끼니 구분 — 식단 관리 화면에서 아침/점심/저녁 섹션으로 나누는 기준
-type MealTime = "아침" | "점심" | "저녁";
 const MEAL_TIMES: MealTime[] = ["아침", "점심", "저녁"];
 // 지금 시각으로 기본 끼니를 고른다 (10시 전 아침, 15시 전 점심, 그 뒤 저녁)
 function defaultMealTime(): MealTime {
@@ -101,99 +78,6 @@ function todayISO(): string {
     d.getDate(),
   ).padStart(2, "0")}`;
 }
-type SavedItem = {
-  id: string;
-  title: string;
-  subtitle: string;
-  createdAt: string;
-  menus?: readonly string[];
-  mealDate?: string;      // 사용자가 고른 날짜 (YYYY-MM-DD)
-  mealTime?: MealTime;    // 사용자가 고른 끼니
-};
-const storage = {
-  get<T>(key: string, fallback: T): T {
-    try {
-      return JSON.parse(localStorage.getItem(key) || "") as T;
-    } catch {
-      return fallback;
-    }
-  },
-  set(key: string, value: unknown) {
-    localStorage.setItem(key, JSON.stringify(value));
-  },
-};
-// 백엔드 주소. 평소에는 빌드 시점에 박힌 값(.env.production)을 쓴다.
-//
-// 비상용 우회로: 배포된 백엔드가 죽었을 때 주소 뒤에 ?api=... 를 붙이면
-// 그 백엔드로 갈아탄다. 한 번 붙이면 브라우저에 기억되므로 이후에는 그냥 열면 된다.
-//   예) https://kook-omega.vercel.app/?api=https://abc-def.trycloudflare.com
-// 원래대로 되돌리려면  ?api=reset  으로 열면 된다.
-const API = (() => {
-  const fallback =
-    (import.meta as any).env.VITE_API_URL || "http://127.0.0.1:8000";
-  try {
-    const q = new URLSearchParams(location.search).get("api");
-    if (q === "reset") {
-      localStorage.removeItem("fook:api");
-      return fallback;
-    }
-    if (q) {
-      const url = q.replace(/\/+$/, "");
-      localStorage.setItem("fook:api", url);
-      return url;
-    }
-    return localStorage.getItem("fook:api") || fallback;
-  } catch {
-    return fallback;
-  }
-})();
-const currentUser = () => storage.get<SavedUser | null>("fook:user", null);
-const authToken = () => localStorage.getItem("fook:token") || "";
-async function apiFetch(path: string, options: RequestInit = {}) {
-  const headers = new Headers(options.headers || {});
-  if (!headers.has("Content-Type") && options.body)
-    headers.set("Content-Type", "application/json");
-  const token = authToken();
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-  const controller = new AbortController();
-  // 무료 호스팅은 요청이 없으면 잠들고, 깨어나는 데 1분 가까이 걸린다.
-  // 12초로 끊으면 잠든 직후의 첫 요청이 무조건 실패하므로 넉넉히 잡는다.
-  const tid = setTimeout(() => controller.abort(), 75000);
-  try {
-    const r = await fetch(`${API}${path}`, {
-      ...options,
-      headers,
-      signal: controller.signal,
-    });
-    clearTimeout(tid);
-    if (!r.ok) {
-      let msg = "요청을 처리하지 못했습니다.";
-      try {
-        const d = await r.json();
-        msg = d.detail || msg;
-      } catch {}
-      throw new Error(msg);
-    }
-    return r.status === 204 ? null : r.json();
-  } catch (e: any) {
-    clearTimeout(tid);
-    if (e.name === "AbortError")
-      throw new Error(
-        "서버 응답 속도가 느려 시간 초과되었습니다. 잠시 후 다시 시도해주세요.",
-      );
-    // 네트워크 자체가 안 닿으면 브라우저는 "Failed to fetch"라는 원문만 준다.
-    // (백엔드 미실행, 또는 서버가 아직 로딩 중이라 포트가 안 열린 경우)
-    if (e instanceof TypeError)
-      throw new Error(
-        "서버에 연결하지 못했습니다. 백엔드가 실행 중인지 확인해주세요.",
-      );
-    throw e;
-  }
-}
-function saveSession(data: any) {
-  localStorage.setItem("fook:token", data.token);
-  storage.set("fook:user", data.user);
-}
 const requireUser = (nav: ReturnType<typeof useNavigate>) => {
   if (!currentUser()) {
     nav("/login");
@@ -201,84 +85,6 @@ const requireUser = (nav: ReturnType<typeof useNavigate>) => {
   }
   return true;
 };
-const addSaved = (key: string, item: SavedItem) => {
-  const list = storage.get<SavedItem[]>(key, []);
-  storage.set(key, [item, ...list.filter((x) => x.id !== item.id)]);
-};
-// 로컬스토리지 키 'fook:favorites'|'fook:history'|'fook:documents' ↔ 서버 리소스 이름 매핑.
-// 서버는 /me/{meal-records|favorites|documents} 로 실제 DB에 저장한다(회원별로 기기 간 동기화됨).
-const RESOURCE_KEY_MAP: Record<string, string> = {
-  "fook:history": "meal-records",
-  "fook:favorites": "favorites",
-  "fook:documents": "documents",
-};
-// 저장: 로그인 상태면 서버(DB)에도 저장한다. 서버 실패해도 로컬엔 남겨서 화면은 끊기지 않는다.
-async function saveEverywhere(key: string, item: SavedItem) {
-  addSaved(key, item);
-  const resource = RESOURCE_KEY_MAP[key];
-  if (!resource || !authToken()) return;
-  try {
-    await apiFetch(`/me/${resource}`, {
-      method: "POST",
-      body: JSON.stringify({
-        title: item.title,
-        subtitle: item.subtitle,
-        payload: {
-          menus: item.menus,
-          createdAt: item.createdAt,
-          mealDate: item.mealDate,
-          mealTime: item.mealTime,
-        },
-      }),
-    });
-  } catch {
-    // 서버 저장 실패는 조용히 무시 — 로컬엔 이미 저장됐으니 화면은 정상 동작
-  }
-}
-// 조회: 로그인 상태면 서버(DB) 목록을 우선 사용, 아니면 로컬 목록을 그대로 쓴다.
-async function loadEverywhere(key: string): Promise<SavedItem[]> {
-  const resource = RESOURCE_KEY_MAP[key];
-  const local = storage.get<SavedItem[]>(key, []);
-  if (!resource || !authToken()) return local;
-  try {
-    const d = await apiFetch(`/me/${resource}`);
-    const items: SavedItem[] = (d?.items || []).map((r: any) => ({
-      id: r.id,
-      title: r.title,
-      subtitle: r.subtitle || "",
-      createdAt: r.created_at,
-      menus: r.payload?.menus || [],
-      mealDate: r.payload?.mealDate,
-      mealTime: r.payload?.mealTime,
-    }));
-    // 서버 저장이 실패했던 항목은 로컬에만 남아 있다. 서버 목록으로 덮어쓰면
-    // 방금 저장한 게 사라져 보이므로, 서버에 없는 로컬 항목은 함께 보여준다.
-    const seen = new Set(
-      items.map((x) => `${x.title}|${x.subtitle}|${x.createdAt?.slice(0, 16)}`),
-    );
-    const extras = local.filter(
-      (x) => !seen.has(`${x.title}|${x.subtitle}|${x.createdAt?.slice(0, 16)}`),
-    );
-    return [...extras, ...items].sort((a, b) =>
-      String(b.createdAt).localeCompare(String(a.createdAt)),
-    );
-  } catch {
-    return local;
-  }
-}
-async function deleteEverywhere(key: string, id: string) {
-  storage.set(
-    key,
-    storage.get<SavedItem[]>(key, []).filter((x) => x.id !== id),
-  );
-  const resource = RESOURCE_KEY_MAP[key];
-  if (!resource || !authToken()) return;
-  try {
-    await apiFetch(`/me/${resource}/${id}`, { method: "DELETE" });
-  } catch {
-    // 무시
-  }
-}
 const labels = ["밥", "국", "어육류", "밑반찬", "김치류"];
 // 목업 기준 표기.
 //  · 식단 생성 화면(2/5): 밥 / 국 / 반찬1 / 반찬2 / 반찬3
@@ -694,6 +500,7 @@ function App() {
     "menu" | "ingredient" | "random"
   >("menu");
   const [apiResult, setApiResult] = useState<ApiResult | null>(null);
+  const [usingFallback, setUsingFallback] = useState(false);
   const value = useMemo(
     () => ({
       profile,
@@ -706,8 +513,10 @@ function App() {
       setSearchMode,
       apiResult,
       setApiResult,
+      usingFallback,
+      setUsingFallback,
     }),
-    [profile, plan, query, searchMode, apiResult],
+    [profile, plan, query, searchMode, apiResult, usingFallback],
   );
   return (
     <AppContext.Provider value={value}>
@@ -778,11 +587,22 @@ function Shell({
   header?: boolean;
   full?: boolean;      // 이미지 한 장이 화면 전체를 채울 때 본문 여백을 없앤다
 }) {
+  const { usingFallback } = useApp();
   return (
     <main className="page">
       <div className="phone">
         {header && <Header />}
         <section className={full ? "screen screen-full" : "screen"}>
+          {usingFallback && (
+            <div className="warning-box fallback-banner">
+              <b>⚠ 예시 데이터를 보고 있어요</b>
+              <span>
+                서버 연결에 실패해서 실제 개인 맞춤 계산이 아닌 내장 예시 값으로
+                화면을 보여주고 있습니다. 아래 영양 판정·재구성 내역은 참고용이
+                아니라 그저 화면 구성을 보여주기 위한 예시입니다.
+              </span>
+            </div>
+          )}
           {children}
         </section>
         {footer && <footer className="footer">{footer}</footer>}
@@ -2191,7 +2011,8 @@ function Home() {
 }
 function Generating() {
   const nav = useNavigate();
-  const { profile, query, searchMode, setApiResult, setPlan } = useApp();
+  const { profile, query, searchMode, setApiResult, setPlan, setUsingFallback } =
+    useApp();
   const [s, setS] = useState(0);
   const [error, setError] = useState("");
   const msgs = [
@@ -2213,8 +2034,12 @@ function Generating() {
     const run = async () => {
       const api = API;
       const body: any = { weight: Number(profile.weight) || 60, meals_left: 3 };
-      if (profile.height) body.height = Number(profile.height);
-      if (profile.gender) body.sex = profile.gender === "남성" ? "남" : "여";
+      // 백엔드가 height와 sex를 항상 같이 요구한다(표준체중 계산에 성별이 필요).
+      // 둘을 독립된 조건으로 보내면 gender가 비어있을 때 height만 보내 422가 나므로 묶는다.
+      if (profile.height) {
+        body.height = Number(profile.height);
+        body.sex = profile.gender === "남성" ? "남" : "여";
+      }
       if (searchMode === "menu" && query.trim()) body.menu = query.trim();
       if (searchMode === "ingredient" && query.trim())
         body.ingredient = query.trim();
@@ -2232,6 +2057,7 @@ function Generating() {
         const d = await r.json();
         if (!live) return;
         setS(4);
+        setUsingFallback(false);
         setApiResult(d);
         const p: Plan = {
           id: "api",
@@ -2247,6 +2073,10 @@ function Generating() {
         setError(
           "서버에 연결하지 못해 내장 예시 데이터로 진행합니다. 백엔드 서버가 켜져 있는지 확인해주세요.",
         );
+        // apiResult를 비워둔 채로(=null) 다음 화면들이 로컬 예시 데이터로 렌더되게 하고,
+        // 그 화면들이 "예시 데이터입니다" 배너를 계속 보여줄 수 있도록 플래그를 켠다.
+        setApiResult(null);
+        setUsingFallback(true);
         setTimeout(() => live && nav("/meal"), 1600);
       }
     };
@@ -2264,6 +2094,7 @@ function Generating() {
     searchMode,
     setApiResult,
     setPlan,
+    setUsingFallback,
   ]);
   return (
     <Shell>
@@ -2366,9 +2197,13 @@ const STATUS_CLASS: Record<NStatus, string> = {
 function Nutrients({
   values,
   targets,
+  isFallback = false,
 }: {
   values: ReturnType<typeof totalNutrition>;
   targets?: any;
+  // true면 실제 서버 판정이 아니라 내장 예시 데이터라는 뜻 — 뱃지를 '적절/초과' 대신
+  // 중립적인 '예시'로 표시해서, 개인 맞춤 판정처럼 보이지 않게 한다.
+  isFallback?: boolean;
 }) {
   return (
     <div className="nutri-list">
@@ -2377,8 +2212,9 @@ function Nutrients({
         const hi = targetOf(targets, n.key);
         const lo = minTargetOf(targets, n.key);
         const status = statusOf(v, lo, hi);
+        const cls = isFallback ? "demo" : STATUS_CLASS[status];
         return (
-          <div className={`nutri-card ${STATUS_CLASS[status]}`} key={n.key}>
+          <div className={`nutri-card ${cls}`} key={n.key}>
             <span className="nutri-icon">{n.icon}</span>
             <span className="nutri-body">
               <b className="nutri-name">{n.label}</b>
@@ -2392,7 +2228,7 @@ function Nutrients({
                 </em>
               </span>
             </span>
-            <i className={`nutri-badge ${STATUS_CLASS[status]}`}>{status}</i>
+            <i className={`nutri-badge ${cls}`}>{isFallback ? "예시" : status}</i>
           </div>
         );
       })}
@@ -2448,7 +2284,7 @@ function Analysis() {
         영양 섭취 적합 여부를 판정했습니다.
       </p>
       <NutrientIconRow />
-      <Nutrients values={raw} targets={targets} />
+      <Nutrients values={raw} targets={targets} isFallback={!apiResult} />
       {/* 하단 안내 카드 — 상태에 따라 색과 문구가 달라진다 */}
       <div className={"notice-card " + state}>
         <i className="notice-mark">{state === "needFix" ? "!" : "✓"}</i>
@@ -2938,7 +2774,11 @@ function FinalMeal() {
           선택한 식단의 <b>재료와 조리과정</b>을 확인해보세요.
         </p>
       </div>
-      <Nutrients values={finalValues} targets={apiResult?.targets} />
+      <Nutrients
+        values={finalValues}
+        targets={apiResult?.targets}
+        isFallback={!apiResult}
+      />
       {/* 하단 탭: 기록 저장 · 홈 · PDF 다운로드 (장바구니 탭은 뺐다) */}
       <div className="final-tabs">
         <button
@@ -3353,8 +3193,10 @@ function DayPlan() {
     setLoading(true);
     setError("");
     const body: any = { weight: Number(profile.weight) || 60 };
-    if (profile.height) body.height = Number(profile.height);
-    if (profile.gender) body.sex = profile.gender === "남성" ? "남" : "여";
+    if (profile.height) {
+      body.height = Number(profile.height);
+      body.sex = profile.gender === "남성" ? "남" : "여";
+    }
     const controller = new AbortController();
     const tid = setTimeout(() => controller.abort(), 90000);
     fetch(`${API}/generate_day`, {
@@ -3573,6 +3415,14 @@ function PdfPreview() {
           </div>
         </div>
         <h2>{plan.menus[1]} 한 끼</h2>
+        {/* PDF는 다운로드되면 앱 화면(Shell의 예시 데이터 배너)과 분리된 별도 파일이 되므로,
+            서버 미연결로 예시 데이터를 쓴 경우 이 안내를 파일 안에도 반드시 함께 남긴다. */}
+        {!apiResult && (
+          <p className="pdf-fallback-notice">
+            ⚠ 서버 연결에 실패해 내장 예시 데이터로 생성된 문서입니다. 실제 개인
+            맞춤 계산 결과가 아닙니다.
+          </p>
+        )}
         {/* 사진 자리(pdf-hero-space)는 뺐다. A4 한 장에 담기지 않아서 표를 위로 당긴다. */}
         <h3>한 끼 전체 레시피</h3>
         <table className="meal-recipe-table">
@@ -3642,7 +3492,7 @@ function PdfPreview() {
                     {n.unit} (기준 {lo > 0 ? `${fmt(lo)}~${fmt(t)}` : `${fmt(t)} 이하`}
                     {n.unit})
                   </td>
-                  <td>{ok ? "적정" : "주의"}</td>
+                  <td>{!apiResult ? "예시" : ok ? "적정" : "주의"}</td>
                 </tr>
               );
             })}

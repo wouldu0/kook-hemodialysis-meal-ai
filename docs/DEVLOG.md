@@ -4,6 +4,68 @@
 
 ---
 
+## v13 업데이트 — 공개 배포 전 보안 점검 반영 (외부 리뷰 7건)
+
+외부 코드 리뷰로 받은 7개 지적사항을 하나씩 실제 코드와 대조 검증한 뒤 반영했다.
+
+### 1) 🔴 `?api=` 백엔드 우회 기능의 토큰 탈취 위험
+- 로그인 토큰(`Authorization: Bearer ...`)이 `?api=`로 지정한 주소로 그대로 전송되는데,
+  이 값을 URL에서 읽어 검증 없이 localStorage에 저장하고 있었다 — 조작된 링크를 열면
+  세션이 공격자 서버로 샐 수 있는 실제 취약점이었다.
+- 기능 자체(무료 호스팅 다운 시 비상 백엔드 전환)는 살리되, `https://`만 허용하고
+  실제로 전환될 때만 `confirm()`으로 대상 주소를 보여주고 동의를 받아야 저장되도록 했다.
+  브라우저가 대화상자를 자동으로 취소해도(자동화 테스트로 확인) 안전한 값으로 남는다.
+
+### 2) 🔴 아이디/비밀번호 찾기의 간소화된 인증
+- `이름+생년월일`만으로 본인확인(이메일/SMS 인증 없음)하는 방식은 실제 서비스 기준으로는
+  약하다는 지적 — 비밀번호 해싱(PBKDF2-SHA256 310,000회+salt)·세션 토큰 해시저장은
+  이미 정상이었으므로, 코드를 바꾸는 대신 README에 "데모 환경의 간소화된 인증"임을
+  명시했다.
+
+### 3) 🟠 서버 미연결(오프라인) 시 예시 데이터가 실제 판정처럼 보이던 문제
+- 서버 생성이 실패하면 내장 예시 데이터로 화면이 계속 진행되는데, 이후 화면들(영양 판정·
+  완성 화면·PDF)이 여전히 '적절/초과' 뱃지를 보여줘서 마치 실제 개인 맞춤 계산처럼 보였다.
+- `usingFallback` 상태를 추가해 화면 상단에 "⚠ 예시 데이터를 보고 있어요" 배너를 계속
+  띄우고, 뱃지도 중립적인 '예시'로 바꿨다. **PDF는 다운로드되면 앱 화면과 분리된 파일이
+  되므로**, PDF 문서 안에도 같은 안내를 별도로 넣었다(화면의 배너만으론 파일엔 안 남음).
+
+### 4) 🟠 `App.tsx` 단일 파일(3,930줄) 정리
+- `type ApiResult = any`였던 걸 실제 `/generate` 응답 구조를 반영한 인터페이스로 교체.
+- API 통신·로컬↔서버 동기화 로직(`apiFetch`, `saveEverywhere` 등)을
+  `src/services/api.ts`로, 공용 타입을 `src/types.ts`로, `AppContext`/`useApp`을
+  `src/hooks/useApp.ts`로 분리했다. (화면 컴포넌트 자체의 전면 분할은 이번 범위에
+  포함하지 않음 — 회귀 위험 대비 검증 범위를 넘어선다고 판단.)
+
+### 5) 🟡 `standard_weight()` height/sex 검증 누락
+- `height`만 주고 `sex`를 안 주거나 오타를 내면 조용히 남성(계수 22) 기준으로 계산되던
+  문제. `GenReq`/`DayReq`에 `sex: Literal['남','여','male','female']` 제약과
+  "height 있으면 sex 필수" model validator를 추가해 422로 막는다.
+
+### 6) 🟡 문서/설정 불일치
+- README의 clone 명령이 옛 저장소 이름(`final_KOOK`)이었던 것을 현재 이름
+  (`kook-hemodialysis-meal-ai`)으로 수정. `frontend/package.json`의 이름을
+  `fook-complete-prototype` → `kook-frontend`로 정리. 저장소 루트에 남아있던 원인 불명의
+  0바이트 `git` 파일 삭제.
+
+### 7) 🟡 자동화 테스트/CI 부재
+- `backend/tests/test_adjust_levers.py`에 순수 함수(TensorFlow 모델 로딩 불필요) 37개
+  테스트 추가 — `standard_weight`, `day_targets`, `meal_bounds`, `num`, `is_seasoning`,
+  `unrealistic_reason`, `p_abs` 등.
+- `.github/workflows/ci.yml` 추가: 백엔드는 `requirements-dev.txt`(pytest+openpyxl만,
+  TensorFlow 제외)로 pytest만 돌리고, 프론트는 `npm ci && npm run build`로 타입체크+빌드만
+  확인한다. 모델 로딩·실제 DB 연결은 CI 범위에 포함하지 않았다.
+
+### 검증
+- ✅ 백엔드: `py_compile` 통과, pytest 37개 전부 통과, `DATABASE_URL` 없이 서버 기동 후
+  `/generate` 정상, `height`만 보내면 422, `height`+잘못된 `sex`도 422 확인
+- ✅ 프론트: `npm run build`(tsc+vite) 통과, `npm audit` 0건
+- ✅ 로컬에서 프론트+백엔드 함께 띄우고 브라우저로 실제 클릭 테스트: `?api=` 악성 링크로
+  접속해도 confirm 거부 시(자동화 테스트 환경의 기본 동작) localStorage에 저장 안 됨을
+  확인, 서버 생성 실패 상황이 실제로 발생해 예시 데이터 배너·PDF 안내·'예시' 뱃지가
+  의도대로 전부 표시되는 것까지 우연히 실제 시나리오로 확인됨
+
+---
+
 ## v12 업데이트 — DB 없이도 서버가 죽던 버그 수정 · 프론트 의존성 보안 패치
 
 ### 1) `DATABASE_URL` 미설정 시 서버 전체가 기동 실패하던 버그
