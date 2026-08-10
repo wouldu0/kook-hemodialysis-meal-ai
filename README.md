@@ -27,6 +27,12 @@
 
 <br/>
 
+![KOOK 시연](assets/demo.gif)
+
+<sub>실제 배포 사이트를 조작해 캡처했습니다 — 검색 → 식단 생성 → 영양 판정 → 재구성 → AI 레시피</sub>
+
+<br/>
+
 ### 🔗 배포된 서비스
 
 **[https://kook-hemodialysis-meal-ai.vercel.app](https://kook-hemodialysis-meal-ai.vercel.app)**
