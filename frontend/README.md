@@ -25,5 +25,5 @@ npm run build   # tsc -b && vite build
 레시피 재구성(레버 조정) → 최종 식단 확인 → 레시피 상세(음성 안내) / PDF 저장
 
 식단 생성·영양 판정·재조정은 백엔드의 실제 Seq2Seq+RL 생성 모델과 영양소 조정 레버
-결과를 그대로 씁니다(`src/App.tsx`의 `apiFetch`). 백엔드가 연결되지 않았을 때만
+결과를 그대로 씁니다(`src/services/api.ts`의 `apiFetch`). 백엔드가 연결되지 않았을 때만
 `src/fookData.ts`의 내장 데이터로 조용히 폴백합니다.

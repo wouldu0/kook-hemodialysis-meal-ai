@@ -35,6 +35,7 @@
 |---|---|---|
 | `DATABASE_URL` | 선택 | Neon Postgres 접속 문자열. 없으면 회원 관련 API(`/auth/*`, `/me/*`)만 500을 반환하고, `/generate` 등 AI 생성 기능은 정상 동작한다 |
 | `OPENAI_API_KEY` | 선택 | `/recipe`, `/tts`, `/chat` 에서만 사용 |
-| `CORS_ORIGINS` | 선택 | 허용할 프론트엔드 주소(쉼표 구분). 기본값은 로컬 개발 주소이며, 배포된 `*.vercel.app`은 `CORS_ORIGIN_REGEX` 기본값으로 이미 허용된다 |
+| `CORS_ORIGINS` | 선택 | 허용할 프론트엔드 주소(쉼표 구분). 기본값은 실제 배포 주소(`kook-hemodialysis-meal-ai.vercel.app`) + 로컬 개발 주소(`localhost:5173`) |
+| `CORS_ORIGIN_REGEX` | 선택 | 미리보기 배포 등 추가 도메인을 정규식으로 임시 허용할 때만 사용. 기본값 없음(비워두면 `CORS_ORIGINS`만 적용) |
 
 > 메모리 사용량은 TensorFlow 모델 상주 기준 약 410MB입니다(루트 README [실측 성능] 참고).
