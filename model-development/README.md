@@ -13,6 +13,13 @@
 정책 경사로 파인튜닝했습니다(`train_rl_FOOK.py`). `backend/Diet-Generation-As-Sequence-master/`에
 있는 체크포인트가 이 학습의 결과물입니다.
 
+> 📄 **기반 연구**: Lee, C., Kim, S., Lim, C., Kim, J., Kim, Y., & Jung, M. (2021). *Diet planning
+> with machine learning: teacher-forced REINFORCE for composition compliance with nutrition
+> enhancement.* KDD 2021. 이 논문의 teacher-forced Seq2Seq + REINFORCE 구조(및 공개된
+> 참조 구현, 폴더명 `Diet-Generation-As-Sequence`)를 뼈대로 삼아, 한국 식단 데이터로 다시
+> 학습하고 투석 환자 5대 영양소 기준에 맞춰 보상 함수를 새로 설계했습니다(위 3,600회 검증,
+> `rl_v2_work/` 재검증 등). 원본 논문의 데이터셋·평가 기준은 KOOK의 것과 다릅니다.
+
 `research-log/`에는 이 모델을 두고 진행한 두 갈래의 심화 진단·실험을 정리해뒀습니다:
 - `phosphorus-protein-resolution/` — 두부·콩류 앵커의 인/단백질 레버 충돌을 13단계로 진단·해결,
   **실제로 채택되어 서비스에 반영됨**.
@@ -22,9 +29,14 @@
 ### `ingredient-substitution_klue-bert-knn/`
 메뉴 재료를 저칼륨·저인 대체재로 바꿀 때 쓰는 임베딩 기반 유사도 모델. KLUE-BERT로 재료 문맥
 임베딩을 만들고(`foodbert/`), KNN으로 가장 가까운 대체재를 찾습니다(`foodbert_embeddings/`).
-`apply_potassium_filter.py` / `apply_phosphorus_filter.py`는 임상영양사 피드백을 반영해 등급
-기준(1회 섭취 기준량당 칼륨 저<100mg·중100~200mg·고>200mg 등)을 실제 대체 로직에 적용한
-스크립트입니다.
+
+> 📄 **기반 연구**: Pellegrini, C., Özsoy, E., Wintergerst, M., & Groh, G. (2021). *Exploiting Food
+> Embeddings for Ingredient Substitution.* HEALTHINF 2021 (폴더명
+> `Exploiting-Food-Embeddings-for-Ingredient-Substitution`). 문맥 임베딩 + KNN으로 대체 재료를
+> 찾는 접근을 가져오되, 영어 BERT 대신 **KLUE-BERT로 교체해 한국어 재료·조리 문맥에 맞췄고**,
+> `apply_potassium_filter.py` / `apply_phosphorus_filter.py`로 **투석 환자 임상 기준(1회
+> 섭취 기준량당 칼륨 저<100mg·중100~200mg·고>200mg 등)을 새로 추가**해 실제 대체 로직에
+> 적용했습니다. 이 임상 필터링은 원 논문에는 없는, KOOK에서 추가한 부분입니다.
 
 ### `benchmarks/`
 서비스 성능·회귀 여부를 수치로 검증한 평가 스크립트 모음입니다. 전부 "서비스 코드/체크포인트/

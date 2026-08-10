@@ -1,16 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-server_FOOK.py — FOOK 통합 백엔드 (FastAPI)
+server_FOOK.py — KOOK 백엔드 API (FastAPI)
 
-두 인수인계본을 병합한 버전입니다.
-  - 회원가입/로그인/세션/프로필/식단기록/즐겨찾기/PDF보관함/장바구니 → Neon(PostgreSQL) DB
-    (기존 "FOOK-total-integrated"의 database.py / auth_utils.py / SQL 스키마 그대로 사용)
+한 서버에서 두 축을 함께 처리합니다.
   - 식단 생성(/generate, /generate_day), 조리법 편집(/recipe), 음성 변환(/tts),
-    메뉴/재료 목록(/menus, /ingredients) → 실제 KLUE-BERT + REINFORCE 강화학습 엔진
-    (팀원이 새로 전달한 "FOOK_handoff"의 app_core_FOOK.py / recipe_editor_FOOK.py 그대로 사용)
-
-즉 이전 통합본의 "/generate가 Neon 템플릿에서 무작위로 하나 뽑아오는 임시 스텁"이었던 부분을,
-실제로 동작하는 AI 생성 엔진으로 교체했습니다. DB 쪽 회원 기능은 그대로 유지됩니다.
+    메뉴/재료 목록(/menus, /ingredients) → KLUE-BERT + REINFORCE 강화학습 엔진
+    (app_core_FOOK.py / recipe_editor_FOOK.py)
+  - 회원가입/로그인/세션/프로필/식단기록/즐겨찾기/PDF보관함/장바구니 → Neon(PostgreSQL) DB
+    (database.py / auth_utils.py / SQL 스키마)
 
 실행:
   conda activate foodbert   (또는 requirements.txt로 venv 구성)

@@ -551,7 +551,7 @@ KOOK/
 │   ├── requirements-dev.txt                     # CI용 최소 의존성(pytest, fastapi, httpx 등)
 │   └── 식약청_영양성분10.4(수정).xlsx              # 영양성분 DB
 │
-├── 📂 model-development/                        # 🔬 AI 엔진 개발·검증 이력 (배포 미포함)
+├── 📂 model-development/                        # 🔬 AI 엔진 개발·검증 이력 + 기반 논문 출처 (배포 미포함)
 │   ├── generation-model_seq2seq-rl/             # 생성모델 학습 코드(Model.py, train_FOOK.py 등)
 │   │   └── research-log/                        # 인/단백질 충돌 해결(채택) · 국 다양성 개선(미배포) 진단 기록
 │   ├── ingredient-substitution_klue-bert-knn/   # 재료 대체 모델 코드(foodbert/ 등)
