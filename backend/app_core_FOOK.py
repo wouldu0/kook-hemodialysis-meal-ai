@@ -8,10 +8,8 @@ app_core_FOOK.py — 투석 한끼 앱 코어 (생성 → resample → 레버조
   3) 랜덤        : 자연스러운 한끼 생성
 공통: 생성 → 레버(투석 5영양 조정) → 5영양 통과할 때까지 resample → 완성 한끼 반환.
 
-실행 (foodbert):
-  conda activate foodbert
-  set TF_USE_LEGACY_KERAS=1
-  cd /d E:\\final
+실행:
+  cd backend
   python app_core_FOOK.py
 """
 import os, sys, copy, threading
@@ -22,7 +20,7 @@ from collections import Counter, defaultdict
 import numpy as np
 import pandas as pd
 
-# [배포판 패치] 절대경로(E:\final) 대신 이 파일 위치 기준 상대경로 → 어느 PC/폴더에서도 실행됨.
+# 이 파일 위치 기준 상대경로를 쓰므로 어느 PC/폴더에서도 그대로 실행된다.
 _HERE = os.path.dirname(os.path.abspath(__file__))
 CODE = os.path.join(_HERE, 'Diet-Generation-As-Sequence-master', 'Diet-Generation-As-Sequence-master', 'Code')
 DATA = os.path.join(_HERE, 'data')

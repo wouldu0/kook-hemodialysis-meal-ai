@@ -42,7 +42,7 @@ os.environ.setdefault('TF_USE_LEGACY_KERAS', '1')
 os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
 # app_core_FOOK / FOOK_adjust_levers / recipe_editor_FOOK 모두 자기 파일 위치 기준
 # 상대경로로 data/, Diet-Generation-.../, Exploiting-.../ 를 읽으므로, 어디서 uvicorn을
-# 실행하든 이 파일이 있는 backend/ 를 작업 디렉터리로 고정한다. (handoff 배포판 패치와 동일)
+# 실행 위치와 무관하게 backend/ 를 작업 디렉터리로 고정한다.
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 import app_core_FOOK as core
 
@@ -106,7 +106,7 @@ def _age_from(b) -> Optional[int]:
 
 
 # user_profiles.birthdate 는 002_account_recovery.sql 에서 추가되는 컬럼이다.
-# 팀원이 마이그레이션을 안 돌린 상태로 서버를 띄워도 계정 찾기가 그냥 죽지 않도록,
+# 마이그레이션이 적용되지 않은 환경에서도 계정 찾기 기능이 실패하지 않도록,
 # 계정 관련 요청이 처음 들어올 때 한 번만 ADD COLUMN IF NOT EXISTS 를 실행해 둔다.
 _birthdate_ready = False
 
