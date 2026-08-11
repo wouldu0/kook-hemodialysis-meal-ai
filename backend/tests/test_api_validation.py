@@ -116,6 +116,69 @@ def test_profile_height_weight_out_of_range_rejected():
         ProfileReq(weight=1000)  # 300 초과
 
 
+# ---------------- GenReq/DayReq.weight (ProfileReq와 동일 범위 재사용) ----------------
+# 감사(audit)에서 지적된 항목: GenReq/DayReq는 weight에 하한/상한이 없어서 0·음수·비현실적으로
+# 큰 값도 그대로 통과해 표준체중·영양목표 계산에 흘러들어갈 수 있었다. ProfileReq가 이미 쓰는
+# 범위(20~300kg)를 그대로 재사용해서 막는다 — 새 기준을 만들지 않는다.
+
+@pytest.mark.parametrize('bad_weight', [0, -5, 1000])
+def test_gen_req_weight_out_of_range_rejected(bad_weight):
+    with pytest.raises(ValidationError):
+        GenReq(weight=bad_weight)
+
+
+@pytest.mark.parametrize('bad_weight', [0, -5, 1000])
+def test_day_req_weight_out_of_range_rejected(bad_weight):
+    with pytest.raises(ValidationError):
+        DayReq(weight=bad_weight)
+
+
+def test_gen_req_valid_weight_accepted():
+    req = GenReq(weight=60)
+    assert req.weight == 60
+
+
+def test_day_req_valid_weight_accepted():
+    req = DayReq(weight=60)
+    assert req.weight == 60
+
+
+def test_day_req_default_weight_is_valid():
+    # 기본값(60)이 우리가 새로 건 ge=20,le=300 범위를 벗어나면 안 된다(회귀 방지).
+    assert DayReq().weight == 60
+    assert GenReq().weight == 60
+
+
+# ---------------- DayReq.menus/ingredients 길이 (하루 세 끼 고정) ----------------
+# 감사에서 지적된 항목: day_result()가 menus[0..2]를 바로 인덱싱해서, 길이 1·2인 menus를
+# 보내면 IndexError -> 500이 났다(제대로 된 4xx가 아니었음). 길이 3만 허용하고, None과 빈
+# 리스트([])는 '지정 안 함'(기존 server_FOOK.clean()의 의미)으로 그대로 허용해야 한다.
+
+@pytest.mark.parametrize('bad_len_menus', [['된장찌개'], ['된장찌개', '김치찌개'],
+                                            ['a', 'b', 'c', 'd']])
+def test_day_req_menus_wrong_length_rejected(bad_len_menus):
+    with pytest.raises(ValidationError):
+        DayReq(menus=bad_len_menus)
+
+
+@pytest.mark.parametrize('bad_len_ings', [['고등어'], ['고등어', '두부']])
+def test_day_req_ingredients_wrong_length_rejected(bad_len_ings):
+    with pytest.raises(ValidationError):
+        DayReq(ingredients=bad_len_ings)
+
+
+def test_day_req_menus_length_three_accepted():
+    req = DayReq(menus=['된장찌개', None, '고등어조림'])
+    assert req.menus == ['된장찌개', None, '고등어조림']
+
+
+def test_day_req_menus_none_or_empty_still_accepted():
+    # None(필드 자체를 안 보냄)과 빈 리스트 둘 다 '지정 안 함'으로 계속 허용되어야 한다
+    # (server_FOOK.clean()이 falsy를 None으로 취급해온 기존 동작과의 호환).
+    assert DayReq(menus=None).menus is None
+    assert DayReq(menus=[]).menus == []
+
+
 # ---------------- FindIdReq / ResetPasswordReq ----------------
 
 def test_reset_password_requires_min_length_new_password():

@@ -98,6 +98,14 @@ export interface ApiResult {
   };
 }
 
+// /generate_day 응답: 끼니별 ApiResult(+label)와 하루 합계.
+export type DayPlanResult = {
+  meals: (ApiResult & { label: string })[];
+  day_nutrition: NutritionBlock;
+  day_targets: ApiResult["targets"];
+  day_passed: boolean;
+};
+
 export type AppState = {
   profile: Profile;
   setProfile: (p: Profile) => void;

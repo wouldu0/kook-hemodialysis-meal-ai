@@ -202,6 +202,12 @@ export function ComparisonPage() {
           <span>{apiResult.note}</span>
         </div>
       )}
+      {apiResult?.warning && (
+        <div className="warning-box">
+          <b>⚠ 나트륨 안내</b>
+          <span>{apiResult.warning}</span>
+        </div>
+      )}
       <section className="change-section">
         <div className="change-heading">
           <span>✓</span>

@@ -7,6 +7,7 @@ import { MealListRow } from "../../components/meal/MealListRow";
 import { Nutrients } from "../../components/meal/Nutrients";
 import { useApp } from "../../hooks/useApp";
 import { generateDayPlan } from "../../services/api";
+import type { DayPlanResult } from "../../types";
 import { labels } from "../../utils/menu";
 
 export function DayPlanPage() {
@@ -14,7 +15,7 @@ export function DayPlanPage() {
   const { profile } = useApp();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<DayPlanResult | null>(null);
   useEffect(() => {
     let live = true;
     setLoading(true);
@@ -67,7 +68,7 @@ export function DayPlanPage() {
       )}
       {!loading && data && (
         <>
-          {data.meals.map((m: any, i: number) => (
+          {data.meals.map((m, i) => (
             <section key={i} className="change-section">
               <div className="change-heading">
                 <span>{m.label?.slice(0, 1) || i + 1}</span>
@@ -86,6 +87,12 @@ export function DayPlanPage() {
                   />
                 ))}
               </div>
+              {m.warning && (
+                <div className="warning-box">
+                  <b>⚠ 나트륨 안내</b>
+                  <span>{m.warning}</span>
+                </div>
+              )}
             </section>
           ))}
           <h2 className="section-title">하루 총 영양</h2>

@@ -1,6 +1,6 @@
 // 백엔드 통신 + 로컬/서버 동기화 저장소. App.tsx의 화면 컴포넌트들은 이 모듈의
 // 함수만 통해서 서버와 이야기한다(직접 fetch를 새로 쓰지 않는다).
-import type { ApiResult, SavedItem, SavedUser } from "../types";
+import type { ApiResult, DayPlanResult, SavedItem, SavedUser } from "../types";
 
 export const storage = {
   get<T>(key: string, fallback: T): T {
@@ -190,7 +190,7 @@ export function generateMeal(body: Record<string, unknown>): Promise<ApiResult> 
   return apiFetch("/generate", { method: "POST", body: JSON.stringify(body), timeoutMs: 60000 });
 }
 
-export function generateDayPlan(body: Record<string, unknown>): Promise<any> {
+export function generateDayPlan(body: Record<string, unknown>): Promise<DayPlanResult> {
   // 세 끼를 이어서 계산하므로 한 끼 생성보다 훨씬 오래 걸린다.
   return apiFetch("/generate_day", { method: "POST", body: JSON.stringify(body), timeoutMs: 90000 });
 }

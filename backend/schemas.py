@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 USERNAME_RE = re.compile(r'^[a-zA-Z0-9_.\-]{4,30}$')
 
@@ -101,15 +101,31 @@ class HeightSexMixin(BaseModel):
 class GenReq(HeightSexMixin):
     menu: Optional[str] = None
     ingredient: Optional[str] = None
-    weight: int = 60
+    # ProfileReq.weight와 같은 범위(20~300kg)를 그대로 재사용한다 — 0/음수/비현실적으로
+    # 큰 값이 그대로 흘러들어가는 걸 막는 raw input sanity bound일 뿐, 임상적으로 '정상
+    # 체중 범위'를 뜻하지 않는다. height가 같이 오면(정상 가입 유저는 거의 항상 그럼)
+    # 실제 영양 목표 계산에는 이 weight 대신 F.standard_weight(height, sex)가 쓰인다 —
+    # weight가 목표 산정에 직접 쓰이는 건 height 없이 호출되는 경우(예: 비회원 체험)뿐.
+    weight: int = Field(default=60, ge=20, le=300)
     consumed: Optional[dict] = None
     meals_left: int = 3
 
 
 class DayReq(HeightSexMixin):
-    weight: int = 60
+    weight: int = Field(default=60, ge=20, le=300)  # ProfileReq.weight와 동일 범위 — 위 GenReq.weight 주석 참고
     menus: Optional[list] = None
     ingredients: Optional[list] = None
+
+    # day_result()는 menus[mi]/ingredients[mi]를 mi=0..2로 바로 인덱싱한다(하루 세 끼 고정).
+    # 길이가 1~2(또는 4+)면 IndexError로 500이 나므로, 여기서 미리 422로 막는다.
+    # 빈 리스트([])는 server_FOOK.clean()이 이미 None(=지정 안 함, 셋 다 랜덤)으로 취급해온
+    # 기존 동작이라 그대로 허용한다 — None과 [] 둘 다 통과, 길이 1·2·4+만 막는다.
+    @field_validator('menus', 'ingredients')
+    @classmethod
+    def _exactly_three(cls, v):
+        if v and len(v) != 3:
+            raise ValueError('menus/ingredients를 주려면 정확히 3개(아침/점심/저녁)여야 합니다.')
+        return v
 
 
 class RecipeReq(BaseModel):

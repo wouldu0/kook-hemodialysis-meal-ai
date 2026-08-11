@@ -401,6 +401,11 @@ def make_meal(menu=None, ingredient=None, W=60, tries=48, temp=0.8, bounds=None,
         # 선택지에서 이미 뺐지만 직접 요청될 수 있으므로, 조용히 바꾸지 말고 이유를 알림
         note += (f' ("{anchor}"은 잡곡의 인·칼륨이 높아 투석 환자에게 권하지 않아요 → 흰쌀밥으로 만듭니다)')
         anchor = F.WHITE_RICE
+    elif menu is not None and anchor not in name2idx and anchor not in gun_names:
+        # 유저가 직접 지정한 메뉴명이 월/군 어디에도 없는 경우 — 예전엔 그냥 앵커 없이(=랜덤)
+        # 조용히 넘어가서 mode=random과 구분이 안 됐다. 재료 미매칭 케이스(위 399줄)와 같은
+        # 방식으로, 못 찾았다는 사실을 note에 남긴다(찾기 알고리즘 자체는 안 건드림).
+        note += f' ("{anchor}"을 찾을 수 없는 메뉴예요 → 랜덤으로 만듭니다)'
     # 군 메뉴는 모델 사전에 없음 → 일반 생성 후 해당 슬롯에 끼워넣기(post-substitution)
     gun_s = gun_slot.get(anchor) if (anchor and anchor in gun_names) else None
     tok_anchor = anchor if (anchor in name2idx) else None    # 월 메뉴만 토큰 앵커
