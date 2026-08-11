@@ -365,6 +365,8 @@ gen_batch(n=2)
 
 # ---------------- 전체 플로우 ----------------
 def passes(t, b):
+    # 인(P)은 실제 섭취 인(raw P, 하드 기준)으로 판정한다 — 흡수보정 인(Peff, FOOK_adjust_levers.py
+    # 참고)은 대체재 선호도 등 최적화용 소프트 신호일 뿐, 여기서(최종 통과/실패)는 쓰지 않는다.
     return (b['Elo'] <= t['E'] <= b['Ehi'] and b['Plo'] <= t['protein'] <= b['Phi'] and
             t['K'] < b['Kmax'] and t['P'] < b['Pmax'] and t['Na_season'] <= b['Namax'])
 

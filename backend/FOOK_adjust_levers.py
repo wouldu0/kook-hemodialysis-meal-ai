@@ -373,7 +373,9 @@ def reduce_amt(i, factor):
 
 # 인 흡수율 보정 (임상영양사 지정, 2026-07-22): 식물성 유기인(피테이트)은 흡수율이 낮아 ×0.7,
 # 가공식품 무기인(인산염 첨가)은 흡수율 ~100%로 유기인(~70%)보다 높아 ×1.5 — 0.7의 대칭 가중.
-# ※ 'P'(원값=실제 섭취 인, 리포팅용)는 그대로 두고, 인 레버/판정용 '흡수 보정 인'만 별도로 쓴다(Peff).
+# P: 실제 섭취 인(원값) — 최종 통과/실패를 가르는 하드 기준(passes()·meal_bounds() 예산 이월 모두 이 값).
+# Peff: 흡수 보정 인 — 하드 기준이 아니라, 대체재 후보를 고를 때 "더 흡수가 덜 되는 쪽"을 선호하는
+# 최적화용 소프트 신호. Pmax 같은 임상 상한과 직접 비교해 pass/fail을 결정하는 데는 쓰지 않는다.
 PLANT_PROTEIN_GROUPS = {'두류'}
 PLANT_P_FACTOR = 0.7
 PROCESSED_P_FACTOR = 1.5
@@ -397,7 +399,8 @@ def totals(inst):
         for k in t:
             if i[k] is not None:
                 t[k] += i['amt'] / 100 * i[k]
-    # 흡수 보정 인 합계(인 상한 판정용). 가공식품 1.5배·식물성 단백질군 0.7배 반영.
+    # 흡수 보정 인 합계(최적화 소프트 신호 — 대체재 선호도 등 참고용. Pmax 하드 판정에는 t['P']를 쓴다).
+    # 가공식품 1.5배·식물성 단백질군 0.7배 반영.
     t['Peff'] = sum(i['amt'] / 100 * p_abs(i['P'], i['group'], i['ing'])
                     for i in inst if i['P'] is not None)
     t['Na_season'] = season_na(inst)   # 첨가염(조미료)만 = 나트륨 판정용
@@ -788,10 +791,18 @@ def lever_phosphorus(inst, pmax, anchor=None, plo=0):
     """인 상한 초과 조정. 유저 지정메뉴(anchor)의 재료는 교체 안 함(정체성 보존).
     순서: (1)비앵커 저인 대체[가공→생것 / subs 저인, 단백질 75%↑ 유지=커플링대응]
           (2)비앵커 양 감소  (3)앵커 양 감소(단백질 하한 plo 지킴)  (4)더 못 줄이면 실패.
-    반환: 상한 충족 성공 여부(False면 앵커 지키느라 인 초과 → 앱이 유저에 알림)."""
+    반환: 상한 충족 성공 여부(False면 앵커 지키느라 인 초과 → 앱이 유저에 알림).
+
+    P: 실제 섭취 인(raw P) = 하드 기준 — app_core_FOOK.passes()의 최종 통과 판정과 동일 기준.
+    Peff: 흡수보정 인 = 최적화용 소프트 신호(대체재가 여럿일 때 그중 더 낮은 쪽을 고르는 선호도).
+    [2026-08-11] 진입/수렴/랭킹 기준을 원래 Peff로 뒀던 버그를 raw P로 통일했다 — Peff<pmax로
+    수렴한 뒤 이후 단백질·나트륨·열량 레버가 되흔들면(phosphorus↔protein 핑퐁) raw P는 상한을
+    넘겼는데도 이 레버 자신은 "통과"로 착각하고 멈추는 사례가 있었다(passes()는 raw P만 보므로
+    실제 서비스 판정과 어긋남). lever_phosphorus_rawP(두부·콩류 앵커 전용 경로)는 애초에 이 4곳을
+    raw P로 뒀던 게 정답이었고, 이 함수(일반 경로)도 이제 동일 기준을 쓴다."""
     ing_nut, base_fresh, ing2kw, kw_rep, subs, _ = NUT
     for _ in range(25):
-        if totals(inst)['Peff'] < pmax:       # 인 '미만' 기준 (흡수 보정 인=식물성 0.7배)
+        if totals(inst)['P'] < pmax:          # raw P '미만' 기준 — passes()와 동일한 하드 기준
             return True
         non = [i for i in inst if i['menu'] != anchor]
 
@@ -813,6 +824,11 @@ def lever_phosphorus(inst, pmax, anchor=None, plo=0):
             # ※ 칼륨 subs 재활용 금지 — SUBS_P는 P/단백질 비율 기반(현미→쌀, 가공→자연 등).
             if is_sole_solid_ingredient(non, i['menu'], exclude=i):
                 continue   # 유일한 고형재료면 대체 대신 양조절로(K레버와 동일 원칙, 2026-07-22)
+            # 채택판정은 raw P(하드 기준, passes()와 동일) — 이 재료(i)의 대체재 후보 중 raw P를
+            # 실제로 줄이면서 커플링(단백질 75%↑) 조건을 만족하는 것들을 전부 모은 뒤, raw P
+            # 감소량이 가장 크고, 동률이면 흡수보정 인(Peff)이 더 낮은 후보를 고른다 — Peff는
+            # "이미 raw P 조건을 만족하는 후보들 사이의 선호도"로만 쓰인다(2026-08-11 추가).
+            sub_best = None   # (g, rep, nd, effP_nd)
             for sub in SUBS_P.get(ing2kw.get(i['ing']), []):   # 저인비율 대체재 (같은군 + 단백질 유지)
                 rep = kw_rep.get(sub); nd = ing_nut.get(rep) if rep else None
                 if not nd or nd['P'] is None or not same_category(nd['group'], i['group']):
@@ -823,17 +839,19 @@ def lever_phosphorus(inst, pmax, anchor=None, plo=0):
                     continue                                 # 자연식품 → 가공식품 교체 금지
                 if menu_has_ingredient(non, i['menu'], rep, exclude=i):
                     continue                                 # 같은 메뉴에 이미 같은 재료 있음 (중복 방지)
-                # 채택판정도 흡수보정 인(effP) 기준. 원값 P로 비교하면 닭가슴살(원값P高·비율低)처럼
-                # 유효인은 낮은데 원값만 높은 후보가 부당하게 스킵된다(실측: 소시지→항상 소고기行, 닭고기 누락).
-                effP_i = p_abs(i['P'], i['group'], i['ing'])
-                effP_nd = p_abs(nd['P'], nd['group'], rep)
-                if effP_nd < effP_i:
+                if nd['P'] < i['P']:                          # raw P 기준 감소 여부(하드 기준)
                     ip, npr = (i['protein'] or 0), (nd['protein'] or 0)
                     if ip == 0 or npr >= ip * 0.75:          # 단백질 75%↑ 유지 = 커플링 대응
-                        g = i['amt'] / 100 * (effP_i - effP_nd)   # 흡수보정 인 감소량 랭킹
-                        if g >= P_SWAP_MIN_GAIN and (best is None or g > best[0]):
-                            best = (g, i, rep, nd)
-                    break
+                        g = i['amt'] / 100 * (i['P'] - nd['P'])   # raw P 감소량 랭킹(하드 기준)
+                        if g >= P_SWAP_MIN_GAIN:
+                            effP_nd = p_abs(nd['P'], nd['group'], rep)   # Peff = 소프트 선호도
+                            if (sub_best is None or g > sub_best[0]
+                                    or (g == sub_best[0] and effP_nd < sub_best[3])):
+                                sub_best = (g, rep, nd, effP_nd)
+            if sub_best:
+                g, rep, nd, _ = sub_best
+                if best is None or g > best[0]:
+                    best = (g, i, rep, nd)
         if best:
             _, i, rep, nd = best
             SWAP_LOG.append((i['menu'], i['ing'], rep, 'P', i['P'], nd['P']))
@@ -844,12 +862,12 @@ def lever_phosphorus(inst, pmax, anchor=None, plo=0):
             rename_menu_for_swap(inst, old_menu, old_ing, rep)   # 이름에 든 재료였으면 메뉴명도 갱신
             continue
 
-        # (2) 비앵커 양 감소 (흡수 보정 인 기여 큰 재료) — 원본 50% 하한
+        # (2) 비앵커 양 감소 (raw P 기여 큰 재료) — 원본 50% 하한
         # factor 0.8→0.7(2026-07-22 조율): 가공육 1.5가중으로 드러난 위반을 양감소가 더 빨리 흡수.
         # 스윕 결과(365일): 0.8=인305 / 0.7=인312·전부충족260 / 0.5(플로어 직행)=인314지만 감소가 급격해 배제.
         cand = [i for i in non if i['P'] and i['amt'] > 1 and reducible(i)]
         if cand:
-            reduce_amt(max(cand, key=lambda x: x['amt'] / 100 * p_abs(x['P'], x['group'], x['ing'])), 0.7)
+            reduce_amt(max(cand, key=lambda x: x['amt'] / 100 * x['P']), 0.7)
             continue
 
         # (3) 앵커(유저 메뉴) 양 감소 — 단백질 하한 + 원본 50% 하한
@@ -860,75 +878,17 @@ def lever_phosphorus(inst, pmax, anchor=None, plo=0):
             continue
 
         return False   # 앵커 지키느라 상한 못 맞춤 → 유저에게 알림
-    return totals(inst)['Peff'] < pmax
+    return totals(inst)['P'] < pmax
 
 
 def lever_phosphorus_rawP(inst, pmax, anchor=None, plo=0):
-    """lever_phosphorus의 raw P 기준 버전(2026-07-27, 두부·콩류 앵커 전용 조건부 경로).
-    로직·대체재풀·임계값은 lever_phosphorus와 완전히 동일 — 판정 기준 4곳만 Peff→원값 P로
-    치환(진입/수렴 조건, 대체후보 비교값, 양감소 랭킹, 루프소진 최종반환). Peff는 여기서
-    전혀 쓰지 않고 totals()의 참고값으로만 남는다.
-    채택 근거: 교차앵커 실험(protein_phosphorus_cross_anchor)에서 이 경로가 두부·콩류
-    앵커에서만 뚜렷한 개선을 보이고 생선구이·육류에서는 효과가 미미해 두부·콩류 전용으로
-    조건부 반영함(adjust()의 _plant_protein_path_needed 분기 참고)."""
-    ing_nut, base_fresh, ing2kw, kw_rep, subs, _ = NUT
-    for _ in range(25):
-        if totals(inst)['P'] < pmax:          # ← raw P (lever_phosphorus는 Peff)
-            return True
-        non = [i for i in inst if i['menu'] != anchor]
-
-        best = None
-        for i in non:
-            if i['P'] is None:
-                continue
-            if i['group'] == '조미료류':
-                continue
-            if any(d in i['ing'] for d in DRIED):
-                continue
-            if is_sole_solid_ingredient(non, i['menu'], exclude=i):
-                continue
-            for sub in SUBS_P.get(ing2kw.get(i['ing']), []):
-                rep = kw_rep.get(sub); nd = ing_nut.get(rep) if rep else None
-                if not nd or nd['P'] is None or not same_category(nd['group'], i['group']):
-                    continue
-                if rep.split(',')[0].strip() == i['ing'].split(',')[0].strip():
-                    continue
-                if is_processed_name(rep, nd['group']) and not is_processed(i):
-                    continue
-                if menu_has_ingredient(non, i['menu'], rep, exclude=i):
-                    continue
-                effP_i = i['P']                 # ← raw P (lever_phosphorus는 p_abs)
-                effP_nd = nd['P']               # ← raw P (lever_phosphorus는 p_abs)
-                if effP_nd < effP_i:
-                    ip, npr = (i['protein'] or 0), (nd['protein'] or 0)
-                    if ip == 0 or npr >= ip * 0.75:
-                        g = i['amt'] / 100 * (effP_i - effP_nd)
-                        if g >= P_SWAP_MIN_GAIN and (best is None or g > best[0]):
-                            best = (g, i, rep, nd)
-                    break
-        if best:
-            _, i, rep, nd = best
-            SWAP_LOG.append((i['menu'], i['ing'], rep, 'P', i['P'], nd['P']))
-            old_ing, old_menu = i['ing'], i['menu']
-            i['ing'] = rep
-            for k in ('E', 'protein', 'P', 'K', 'Na', 'group'):
-                i[k] = nd[k]
-            rename_menu_for_swap(inst, old_menu, old_ing, rep)
-            continue
-
-        cand = [i for i in non if i['P'] and i['amt'] > 1 and reducible(i)]
-        if cand:
-            reduce_amt(max(cand, key=lambda x: x['amt'] / 100 * x['P']), 0.7)   # ← raw P (lever_phosphorus는 p_abs)
-            continue
-
-        anc = [i for i in inst if i['menu'] == anchor and i['amt'] > 1 and reducible(i)]
-        if anc and totals(inst)['protein'] > plo:
-            for i in anc:
-                reduce_amt(i, 0.85)
-            continue
-
-        return False
-    return totals(inst)['P'] < pmax            # ← raw P (lever_phosphorus는 Peff)
+    """lever_phosphorus의 raw P 기준 버전(2026-07-27, 두부·콩류 앵커 전용 조건부 경로)이었다.
+    [2026-08-11] lever_phosphorus 쪽의 판정 기준을 Peff→raw P로 통일하면서 두 함수의 로직이
+    완전히 같아져(둘 다 raw P 하드 기준 + Peff 소프트 선호도), 중복을 없애고 lever_phosphorus에
+    위임한다. 두부·콩류 전용 경로라는 호출부(adjust()의 _plant_protein_path_needed 분기,
+    lever_protein_capped/lever_calorie_capped와 짝을 이루는 이름)는 그대로 유지 — 함수명·시그니처
+    변경 없이 내부 구현만 통합했다."""
+    return lever_phosphorus(inst, pmax, anchor=anchor, plo=plo)
 
 
 def lever_protein(inst, lo, hi, anchor=None):
@@ -1414,7 +1374,7 @@ def meal_bounds(weight, consumed=None, meals_left=3, total_meals=3, tol=0.2):
     앞 끼에 미역국 등으로 자연나트륨을 많이 먹었으면 다음 끼 목표가 빡빡해져 lever_sodium_extra가 더 세게 줄인다.
     """
     d = day_targets(weight)
-    c = consumed or {'E': 0, 'protein': 0, 'K': 0, 'P': 0, 'Peff': 0, 'Na': 0}
+    c = consumed or {'E': 0, 'protein': 0, 'K': 0, 'P': 0, 'Na': 0}
     n = max(1, meals_left)
 
     def rng(dv, used):   # 범위형(열량·단백질) 하한/상한: 밴드로 클램프
@@ -1428,7 +1388,9 @@ def meal_bounds(weight, consumed=None, meals_left=3, total_meals=3, tol=0.2):
     return {'Elo': rng(d['Elo'], c['E']), 'Ehi': rng(d['Ehi'], c['E']),
             'Plo': rng(d['Plo'], c['protein']), 'Phi': rng(d['Phi'], c['protein']),
             'Kmax': cap(d['Kmax'], c['K']),
-            'Pmax': cap(d['Pmax'], c.get('Peff', c['P'])),   # 남은 인 예산도 흡수 보정 기준
+            # 인(P)은 raw P가 하드 기준(passes()와 동일) — 남은 예산도 반드시 raw P로 이월한다.
+            # Peff(흡수보정 인)는 최적화용 소프트 신호일 뿐 예산·상한 판정에는 쓰지 않는다.
+            'Pmax': cap(d['Pmax'], c.get('P', 0)),
             'Namax': SALT_MG,   # 나트륨 끼니 고정 = 조미료 소금 1g (자연염 제외)
             'Na_total_target': cap(NA_TOTAL_MEAL * total_meals, c.get('Na', 0))}   # 총나트륨 남은예산
 

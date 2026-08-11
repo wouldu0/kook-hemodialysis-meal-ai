@@ -10,7 +10,9 @@ frontend/.env.local
 
 # ── 파이썬 ──────────────────────────────────────────────────────
 .venv/
+venv/
 backend/.venv/
+backend/venv/
 __pycache__/
 *.py[cod]
 *.egg-info/
