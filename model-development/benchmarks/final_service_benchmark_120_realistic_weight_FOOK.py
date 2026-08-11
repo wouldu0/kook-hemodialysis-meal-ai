@@ -12,6 +12,7 @@ meals_left)는 이전 스크립트와 최대한 동일하게 유지한다.
 서비스 코드/체크포인트/레버 코드는 수정하지 않는다. 평가·보고만 수행.
 """
 import os, sys, csv, time
+from pathlib import Path
 os.environ.setdefault('TF_USE_LEGACY_KERAS', '1')
 os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
 try:
@@ -20,16 +21,43 @@ try:
 except Exception:
     pass
 
-CODE = r'E:\final\Diet-Generation-As-Sequence-master\Diet-Generation-As-Sequence-master\Code'
-sys.path.insert(0, CODE)
-sys.path.insert(0, r'E:\final')
-import numpy as np
+# ── 경로 (레포 상대, 어느 OS/어느 위치에 clone해도 그대로 동작) ──
+# 이 파일: <repo>/model-development/benchmarks/final_service_benchmark_120_realistic_weight_FOOK.py
+_THIS_FILE = Path(__file__).resolve()
+REPO_ROOT = _THIS_FILE.parents[2]
+BACKEND_DIR = REPO_ROOT / 'backend'
+_CORE_PATH = BACKEND_DIR / 'app_core_FOOK.py'
+if not _CORE_PATH.is_file():
+    raise FileNotFoundError(
+        f'backend/app_core_FOOK.py를 찾지 못했습니다. 확인한 경로: {_CORE_PATH}\n'
+        f'(이 스크립트 위치 기준 REPO_ROOT={REPO_ROOT} 를 <레포 루트>로 가정하고 그 아래 backend/를 '
+        f'찾았는데 없습니다 — 레포 구조가 바뀌었다면 이 스크립트의 경로 계산부(REPO_ROOT/BACKEND_DIR)를 '
+        f'다시 확인하세요. 존재하지 않는 경로를 임의로 지어내 쓰지 않습니다.)'
+    )
+sys.path.insert(0, str(BACKEND_DIR))
 
-OUT_DIR = os.path.join(CODE, 'final_service_benchmark_out')
+OUT_DIR = str(_THIS_FILE.parent / 'final_service_benchmark_out')
 os.makedirs(OUT_DIR, exist_ok=True)
 
+import numpy as np
+
 print('app_core_FOOK 임포트 (production: RL i002 + 현재 최종 레버)...')
-import app_core_FOOK as core   # noqa: E402
+# FOOK_adjust_levers.load_all()(app_core_FOOK 임포트 도중 모듈 로드 시점에 호출됨)이
+# glob.glob('data/*월_raw.xlsx'), open('data/FOOK_nutrition.csv') 등 CWD 상대경로로 데이터를 읽는다.
+# 그래서 임포트하는 동안만 CWD를 backend/로 옮기고, 끝나면 원래 CWD로 되돌린다.
+_prev_cwd = os.getcwd()
+os.chdir(BACKEND_DIR)
+try:
+    import app_core_FOOK as core   # noqa: E402
+finally:
+    os.chdir(_prev_cwd)
+
+_loaded_core_path = Path(core.__file__).resolve()
+print(f'  core.__file__ = {_loaded_core_path}')
+assert _loaded_core_path == _CORE_PATH, (
+    f'로드된 app_core_FOOK 모듈이 이 레포 체크아웃의 backend/app_core_FOOK.py가 아닙니다! '
+    f'실제 로드됨: {_loaded_core_path}, 기대: {_CORE_PATH}'
+)
 print(f'  core.CKPT = {core.CKPT}')
 print(f'  최종 레버 함수 존재(있어야 함): {hasattr(core.F, "lever_phosphorus_rawP")}')
 print(f'  표준체중 공식 실제 사용 확인: F.standard_weight(170,"남")={core.F.standard_weight(170,"남"):.2f}kg'
@@ -263,7 +291,7 @@ def run_one(weight, mode, meals_left, target, day_context):
             for mi_ in range(3 - meals_left):
                 bounds_i = core.F.meal_bounds(weight, consumed, meals_left=3 - mi_)
                 cand_i, _, _, _, _ = core.make_meal(menu=None, W=weight, bounds=bounds_i)
-                _, _, after_i, _ = cand_i
+                _, _, after_i, _, _ = cand_i
                 for k in CONSUMED_KEYS:
                     consumed[k] = round(consumed[k] + after_i[k], 4)
             prior_consumed = dict(consumed)
@@ -277,7 +305,7 @@ def run_one(weight, mode, meals_left, target, day_context):
         cand, note, b, resolved_anchor, warn = core.make_meal(menu=menu_arg, ingredient=ing_arg,
                                                                 W=weight, bounds=bounds_test)
         elapsed = time.perf_counter() - t_start
-        menus, inst, after, ok = cand
+        menus, inst, after, ok, _before = cand
         flags = nutrient_flags(after, b)
         all5_pass = all(flags.values())
         unreal = core.F.unrealistic_reason(inst)
@@ -330,6 +358,29 @@ print(f'저장: {bench_csv}')
 n_fail = sum(1 for r in bench_results if r['success_ok'] is False)
 n_err = sum(1 for r in bench_results if r['error'])
 print(f'전체 성공률: {sum(1 for r in bench_results if r["success_ok"])}/120, 실패 {n_fail}건, 오류 {n_err}건')
+
+n_total = len(bench_results)
+n_all5 = sum(1 for r in bench_results if r['all5_nutrient_pass'])
+n_ok = sum(1 for r in bench_results if r['success_ok'])
+n_unreal = sum(1 for r in bench_results if r['unrealistic'])
+# anchor_preserved는 random모드(앵커 미지정)면 target_menu가 None이라 정의상 항상 True(공허참)가 되므로,
+# 사용자가 실제로 메뉴/재료를 지정한 시나리오(mode != 'random')만 분모로 삼아야 의미 있는 지표가 된다.
+anchor_relevant = [r for r in bench_results if r['mode'] != 'random' and r['anchor_preserved'] is not None]
+n_anchor_ok = sum(1 for r in anchor_relevant if r['anchor_preserved'])
+n_anchor_denom = len(anchor_relevant)
+print('\n=== 120개 시나리오 종합 요약 ===')
+print(f'  전체 시나리오: {n_total}개')
+print(f'  all5_nutrient_pass(5대 영양기준 충족): {n_all5}/{n_total} ({n_all5/n_total*100:.1f}%)')
+print(f'  success_ok(품질조건까지 포함한 성공): {n_ok}/{n_total} ({n_ok/n_total*100:.1f}%)')
+print(f'  unrealistic(비현실적 재료량): {n_unreal}/{n_total} ({n_unreal/n_total*100:.1f}%)')
+if n_anchor_denom:
+    print(f'  anchor_preserved(요청 앵커 유지, mode!=random 대상): {n_anchor_ok}/{n_anchor_denom} '
+          f'({n_anchor_ok/n_anchor_denom*100:.1f}%)')
+else:
+    print('  anchor_preserved: 해당 시나리오 없음(mode!=random 0건)')
+print('  ※ anchor_preserved 분모는 이 스크립트 자체 정의(120개 중 mode!=random인 시나리오 수)이며,')
+print('    다른 벤치마크/보고서의 "요청 반영률" 수치(예: 71/75)와 이름은 비슷해도 서로 다른 실행·')
+print('    스크립트에서 나온 값일 수 있어 그 수치와 반드시 같다는 보장은 없다 — 혼동 주의.')
 
 
 def pick_representative(tier_name, n_pick, all_rows):

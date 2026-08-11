@@ -37,3 +37,6 @@ Thumbs.db
 
 # 레버 로직 수동 백업본 (디스크에만 두고 저장소에는 올리지 않는다)
 *.bak_*
+
+# 벤치마크 스크립트 실행 산출물 (재실행할 때마다 새로 생성됨)
+model-development/benchmarks/final_service_benchmark_out/
