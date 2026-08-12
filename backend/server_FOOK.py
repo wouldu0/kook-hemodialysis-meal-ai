@@ -28,6 +28,7 @@ from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from sqlalchemy import text
+from psycopg.types.json import Jsonb
 
 from database import db
 from auth_utils import hash_password, verify_password, issue_session, resolve_user
@@ -381,8 +382,12 @@ def save_resource(resource: str, req: SaveReq, user=Depends(bearer)):
         raise HTTPException(404)
     rid = str(uuid.uuid4())
     with db() as conn:
+        # payload는 jsonb 컬럼인데, psycopg3는 맨 dict를 자동으로 json 파라미터로
+        # 바꿔주지 않는다(Json/Jsonb로 감싸야 함) — 감싸지 않으면 매 저장마다
+        # "cannot adapt type 'dict'"로 500이 난다. meal-records/favorites/documents
+        # 저장 전부가 이 한 줄을 거치므로 여기서만 감싸면 셋 다 해결된다.
         conn.execute(text(f'insert into {table}(id,user_id,title,subtitle,payload) values(:i,:u,:t,:s,:p)'),
-                    {'i': rid, 'u': user['id'], 't': req.title, 's': req.subtitle, 'p': req.payload})
+                    {'i': rid, 'u': user['id'], 't': req.title, 's': req.subtitle, 'p': Jsonb(req.payload)})
     return {'id': rid}
 
 
