@@ -26,6 +26,16 @@ expand() 단계 재료 정규화: 잡곡→백미, 육수(멸치·다시마·사
   pass1·pass2 나트륨 재검증은 전부 무변경(두 경로 공통). S1(pre-loop 나트륨 제거)은
   이번 확정에 포함하지 않음(별도 미채택 사안).
 - 롤백: FOOK_adjust_levers.py.bak_before_rawP_tofu_path_20260727 로 파일 교체.
+
+[2026-08-11 갱신] 위는 두부·콩류 전용 조건부 경로가 왜/어떻게 생겼는지의 트러블슈팅
+기록으로 그대로 남겨둔다(그 조건부 경로 자체, 즉 _plant_protein_path_needed 분기와
+lever_protein_capped/lever_calorie_capped의 단백질·열량 상한은 지금도 유지). 다만
+"그 외(두부·콩류 아닌) 앵커는 기존 lever_phosphorus를 그대로 쓴다"는 설명은 더 이상
+현재 상태가 아니다 — 전체 서비스 감사에서 일반 lever_phosphorus()도 수렴판정·후보선택을
+Peff 기준으로 하고 있어 같은 phosphorus↔protein 불일치를 안고 있던 게 드러났고, 이제는
+모든 경로(두부·콩류 포함)의 인 hard constraint를 raw P로 통일했다. lever_phosphorus_rawP는
+더 이상 별도 로직이 아니라 lever_phosphorus에 위임하는 얇은 래퍼이고, Peff는 어디서도
+하드 기준으로 쓰이지 않고 대체재 후보 선택 시의 소프트 타이브레이크 신호로만 남았다.
 """
 import openpyxl, glob, os, csv, json
 from collections import Counter, defaultdict
@@ -1405,7 +1415,7 @@ def main():
     EPS = 1e-6   # 부동소수점 누적오차 허용오차 — 예: 1799.9999999999998가 정확히 1800인데 미달로 오판되는 것 방지
     def day_ok(t):   # 하루 총합 판정 (나트륨은 조미료 끼니고정 393x3=1179 상한)
         return (dt['Elo'] - EPS <= t['E'] <= dt['Ehi'] + EPS, dt['Plo'] - EPS <= t['protein'] <= dt['Phi'] + EPS,
-                t['K'] < dt['Kmax'] + EPS, t['Peff'] < dt['Pmax'] + EPS, t['Na_season'] <= dt['Namax'] + EPS)
+                t['K'] < dt['Kmax'] + EPS, t['P'] < dt['Pmax'] + EPS, t['Na_season'] <= dt['Namax'] + EPS)
 
     labels = ['열량', '단백질', '칼륨', '인', '나트륨']
     n_days = 0
