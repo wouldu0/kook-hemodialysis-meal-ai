@@ -263,6 +263,15 @@ export function HomePage() {
           🎲 랜덤 추천 다시 받기
         </button>
       )}
+      {/* 하루 세 끼 생성: 한 끼 생성(위 3개 카드)과는 성격이 달라 quick-cards에
+          섞지 않고 별도 카드로 분리해뒀다. */}
+      <div className="info-box day-plan-card">
+        <b>하루 식단 만들기</b>
+        <span>아침·점심·저녁을 하루 영양 기준에 맞춰 한 번에 구성해드려요.</span>
+        <Button secondary onClick={() => nav("/day")}>
+          하루 식단 만들기
+        </Button>
+      </div>
       {/* 랜덤 추천 확인 팝업: 왼쪽 아니오 / 오른쪽 네 */}
       {randomAsk && (
         <div className="modal-bg" onClick={() => setRandomAsk(false)}>
