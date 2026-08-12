@@ -110,6 +110,9 @@ export async function saveEverywhere(key: string, item: SavedItem) {
           createdAt: item.createdAt,
           mealDate: item.mealDate,
           mealTime: item.mealTime,
+          raw_menus: item.raw_menus,
+          intake: item.intake,
+          dish_ingredients: item.dish_ingredients,
         },
       }),
     });
@@ -133,6 +136,9 @@ export async function loadEverywhere(key: string): Promise<SavedItem[]> {
       menus: r.payload?.menus || [],
       mealDate: r.payload?.mealDate,
       mealTime: r.payload?.mealTime,
+      raw_menus: r.payload?.raw_menus,
+      intake: r.payload?.intake,
+      dish_ingredients: r.payload?.dish_ingredients,
     }));
     // 서버 저장이 실패했던 항목은 로컬에만 남아 있다. 서버 목록으로 덮어쓰면
     // 방금 저장한 게 사라져 보이므로, 서버에 없는 로컬 항목은 함께 보여준다.

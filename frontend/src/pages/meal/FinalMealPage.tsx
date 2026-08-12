@@ -24,6 +24,11 @@ export function FinalMealPage() {
     subtitle: plan.menus.join(" · "),
     createdAt: new Date().toISOString(),
     menus: plan.menus,
+    // /generate 응답을 그대로 함께 저장해둔다 — 나중에 consumed/used_today를
+    // 연결할 때 재계산 없이 바로 쓸 수 있게 하기 위함 (재계산·Peff 추가 없음).
+    raw_menus: apiResult?.raw_menus,
+    intake: apiResult?.intake,
+    dish_ingredients: apiResult?.dish_ingredients,
   };
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [openRecipe, setOpenRecipe] = useState(""); // 인라인으로 펼친 레시피
@@ -34,7 +39,7 @@ export function FinalMealPage() {
   // 식단 기록은 날짜·끼니를 먼저 고르게 하고, 그 외(PDF 등)는 바로 저장한다.
   const save = async (key: string, msg: string) => {
     if (!requireUser(nav)) return;
-    if (key === "fook:favorites") return setAskSlot({ key, msg });
+    if (key === "fook:history") return setAskSlot({ key, msg });
     setSavingKey(key);
     try {
       await saveEverywhere(key, item);
@@ -90,11 +95,11 @@ export function FinalMealPage() {
       {/* 하단 탭: 기록 저장 · 홈 · PDF 다운로드 (장바구니 탭은 뺐다) */}
       <div className="final-tabs">
         <button
-          disabled={savingKey === "fook:favorites"}
-          onClick={() => save("fook:favorites", "기록된 식단에 추가했어요.")}
+          disabled={savingKey === "fook:history"}
+          onClick={() => save("fook:history", "기록된 식단에 추가했어요.")}
         >
           <BookmarkIcon />
-          <span>{savingKey === "fook:favorites" ? "기록 중..." : "기록하기"}</span>
+          <span>{savingKey === "fook:history" ? "기록 중..." : "기록하기"}</span>
         </button>
         <button onClick={() => nav("/home")}>
           <HomeIcon />

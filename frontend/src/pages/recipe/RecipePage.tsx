@@ -14,7 +14,7 @@ import { requireUser } from "../../utils/auth";
 export function RecipePage() {
   const nav = useNavigate();
   const { name = "" } = useParams();
-  const { plan } = useApp();
+  const { plan, apiResult } = useApp();
   const decoded = decodeURIComponent(name);
   const [selected, setSelected] = useState(decoded);
   const [askSlot, setAskSlot] = useState(false); // 날짜·끼니 선택 팝업
@@ -24,7 +24,7 @@ export function RecipePage() {
   };
   const saveWithSlot = async (date: string, time: MealTime) => {
     setAskSlot(false);
-    await saveEverywhere("fook:favorites", {
+    await saveEverywhere("fook:history", {
       id: `meal-${Date.now()}`,
       title: plan.menus[1] || decoded,
       subtitle: plan.menus.join(" · "),
@@ -32,6 +32,9 @@ export function RecipePage() {
       menus: plan.menus,
       mealDate: date,
       mealTime: time,
+      raw_menus: apiResult?.raw_menus,
+      intake: apiResult?.intake,
+      dish_ingredients: apiResult?.dish_ingredients,
     });
     alert(`${date} ${time} 식단으로 기록했어요.`);
   };

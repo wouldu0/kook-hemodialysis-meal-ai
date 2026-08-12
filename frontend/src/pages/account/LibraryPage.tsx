@@ -93,8 +93,8 @@ export function LibraryPage({
           <span>불러오는 중...</span>
         </div>
       )}
-      {!loading && items.length > 0 && mode === "favorites" && (
-        // 식단 관리는 아침 / 점심 / 저녁 섹션으로 한 줄씩 나눠서 보여준다
+      {!loading && items.length > 0 && (mode === "favorites" || mode === "history") && (
+        // 식단 관리·식단 기록은 아침 / 점심 / 저녁 섹션으로 한 줄씩 나눠서 보여준다
         <>
           {MEAL_TIMES.map((t) => (
             <section className="meal-slot-section" key={t}>
@@ -144,7 +144,7 @@ export function LibraryPage({
           )}
         </>
       )}
-      {!loading && items.length > 0 && mode !== "favorites" && (
+      {!loading && items.length > 0 && mode !== "favorites" && mode !== "history" && (
         <div className="saved-list">
           {items.map((x) => (
             <SavedCard

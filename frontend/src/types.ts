@@ -49,6 +49,11 @@ export type SavedItem = {
   menus?: readonly string[];
   mealDate?: string; // 사용자가 고른 날짜 (YYYY-MM-DD)
   mealTime?: MealTime; // 사용자가 고른 끼니
+  // 아래 세 필드는 /generate 응답(ApiResult)에서 그대로 가져와 기록에 함께 저장해둔다.
+  // 나중에 consumed/used_today를 연결할 때 재계산 없이 바로 쓸 수 있게 하기 위함.
+  raw_menus?: ApiResult["raw_menus"];
+  intake?: ApiResult["intake"];
+  dish_ingredients?: ApiResult["dish_ingredients"];
 };
 
 // backend/app_core_FOOK.py의 meal_result()가 실제로 내려주는 응답 형태.
