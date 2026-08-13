@@ -3,9 +3,13 @@
 # test_adjust_levers.py는 순수 함수만 다뤄서 openpyxl 정도만 있으면 되고,
 # test_api_validation.py(schemas.py, rate_limit.py)도 app_core_FOOK(TF 모델 로딩)을
 # import하지 않으므로 fastapi/pydantic/httpx만 있으면 됩니다(TensorFlow는 불필요).
+# test_rag_chatbot.py(FOOK_rag_chatbot.py)는 OpenAI 라이브 호출은 전부 모킹하지만(openai
+# 패키지 자체는 함수 안에서 지연 import되므로 불필요), numpy(코사인 유사도 계산)는 모듈
+# 최상단에서 바로 import하므로 여기 없으면 테스트 수집 단계에서 ImportError로 죽는다.
 # 설치: pip install -r requirements-dev.txt
 pytest==8.3.4
 openpyxl==3.1.5
 fastapi==0.116.1
 pydantic[email]==2.11.7
 httpx==0.28.1
+numpy==2.0.2

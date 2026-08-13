@@ -86,6 +86,10 @@ export function AccountPage() {
           <span>칼륨 낮추는 조리 팁</span>
           <i>›</i>
         </button>
+        <button onClick={() => nav("/chat")}>
+          <span>영양 상담 챗봇</span>
+          <i>›</i>
+        </button>
       </div>
       <button className="logout" onClick={handleLogout}>
         로그아웃

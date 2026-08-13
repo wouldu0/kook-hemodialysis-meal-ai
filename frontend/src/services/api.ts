@@ -270,6 +270,19 @@ export function getMe(): Promise<{ user: any; profile: any }> {
   return apiFetch("/me");
 }
 
+// RAG 영양 상담 챗봇. 현재는 개인화(weight/consumed/meals_left) 없이 일반 질문만 보낸다 —
+// "오늘 이미 먹은 양(consumed)"을 로그인 유저 기준으로 정확히 집계하는 방법이 프론트에 아직
+// 없어서(끼니별 기록은 있어도 "오늘 하루 합계"를 만들어주는 화면/엔드포인트가 없음), 근거 없는
+// 값을 지어내 보내느니 일반 질문 모드로만 동작시킨다(백엔드 chat()도 weight/consumed가 없으면
+// 자동으로 일반 답변 모드로 폴백한다).
+export function askChat(question: string): Promise<{ answer: string; sources: string[] }> {
+  return apiFetch("/chat", {
+    method: "POST",
+    body: JSON.stringify({ question }),
+    timeoutMs: 45000,
+  });
+}
+
 export function logout() {
   return apiFetch("/auth/logout", { method: "POST" });
 }

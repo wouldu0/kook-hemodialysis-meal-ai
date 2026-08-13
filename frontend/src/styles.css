@@ -348,3 +348,18 @@ body{font-size:16px}
   .gauge-range{display:none}
   .auth-links button{font-size:12px}
 }
+
+/* ── 영양 상담 챗봇 (/chat) ── */
+.chat-thread{display:grid;gap:14px;margin-top:4px}
+.chat-msg{display:grid;gap:6px}
+.chat-msg.user{justify-items:end}
+.chat-msg.assistant{justify-items:start}
+.chat-bubble{max-width:90%;padding:12px 14px;border-radius:16px;font-size:14px;line-height:1.6;white-space:pre-wrap}
+.chat-msg.user .chat-bubble{background:var(--g);color:#fff;border-bottom-right-radius:4px}
+.chat-msg.assistant .chat-bubble{background:#fff;border:1px solid var(--line);color:var(--ink);border-bottom-left-radius:4px}
+.chat-sources{max-width:90%;font-size:11px;color:var(--muted);background:var(--gs);border-radius:12px;padding:8px 10px;display:grid;gap:3px}
+.chat-sources b{color:var(--gd);font-size:11px;font-weight:800}
+.chat-input-row{display:flex;gap:8px;align-items:flex-end}
+.chat-input-row textarea{flex:1;resize:none;border:1px solid var(--line);border-radius:14px;padding:12px 14px;font:inherit;min-height:48px;max-height:120px;background:#fff}
+.chat-input-row button{flex:0 0 auto;min-height:48px;padding:0 18px;border:0;border-radius:14px;background:var(--g);color:#fff;font-weight:800}
+.chat-input-row button:disabled{opacity:.4}

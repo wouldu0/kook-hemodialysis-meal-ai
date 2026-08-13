@@ -1,0 +1,224 @@
+[
+  {
+    "id": "k1",
+    "category": "칼륨 관리",
+    "question": "혈액투석 환자가 피해야 할 고칼륨 채소는 어떤 게 있나요?",
+    "type": "rag",
+    "expected_source": ["혈액투석_영양식생활관리_2권"],
+    "note": "'채소가 먹고 싶을 때' 챕터의 고칼륨군(아욱, 근대, 머위, 미나리, 부추, 쑥, 시금치 등) 목록 근거."
+  },
+  {
+    "id": "k2",
+    "category": "칼륨 관리",
+    "question": "칼륨 수치가 너무 높아지면 몸에 어떤 문제가 생기나요?",
+    "type": "rag",
+    "expected_source": ["혈액투석_영양식생활관리_2권"],
+    "note": "'근육마비, 부정맥, 심장마비 등이 발생할 수 있습니다' 문장 근거."
+  },
+  {
+    "id": "p1",
+    "category": "인 관리",
+    "question": "혈액투석 환자는 하루에 인을 얼마나 섭취해야 하나요?",
+    "type": "rag",
+    "expected_source": ["혈액투석_영양식생활관리_2권"],
+    "note": "'하루 인 섭취는 800-1,000 mg/일로 제한합니다' 문장 근거."
+  },
+  {
+    "id": "p2",
+    "category": "인 관리",
+    "question": "가공식품에 들어있는 '숨은 인'이 왜 문제가 되나요?",
+    "type": "rag",
+    "expected_source": ["혈액투석_영양식생활관리_2권"],
+    "note": "'가공 식품 속의 인은 거의 100% 흡수', '숨은 인' 단락 근거."
+  },
+  {
+    "id": "na1",
+    "category": "나트륨/염분 관리",
+    "question": "나트륨(염분) 섭취를 줄이려면 요리할 때 어떻게 해야 하나요?",
+    "type": "rag",
+    "expected_source": ["만성콩팥병_환자_식사요법"],
+    "note": "'나트륨 섭취를 줄이는 방법' 목록(소금·간장·된장 줄이기, 김치 4~5쪽 등) 근거."
+  },
+  {
+    "id": "na2",
+    "category": "나트륨/염분 관리",
+    "question": "하루 나트륨(염분) 섭취 권장량은 얼마인가요?",
+    "type": "rag",
+    "expected_source": ["만성콩팥병_환자_식사요법"],
+    "note": "'실제 섭취 권장량 5g(나트륨 2,000mg)' 표 근거. (주의: '소금'이라는 단어를 그대로 쓰면 find_food()가 DB의 '소금, 가공염, 맛소금' 항목과 매칭돼 food_db로 라우팅돼버린다 — 재료명과 겹치는 일반 명사라 의도적으로 피함.)"
+  },
+  {
+    "id": "prot1",
+    "category": "단백질 섭취",
+    "question": "투석을 시작하기 전 만성콩팥병 환자는 왜 단백질을 제한해야 하나요?",
+    "type": "rag",
+    "expected_source": ["콩팥병_환자를_위한_안내서"],
+    "note": "'단백질 제한 (<0.8 g/kg/day)을 권고' 단락 근거."
+  },
+  {
+    "id": "prot2",
+    "category": "단백질 섭취",
+    "question": "투석을 받고 있는 환자는 단백질을 얼마나 섭취해야 하나요?",
+    "type": "rag",
+    "expected_source": ["콩팥병_환자를_위한_안내서"],
+    "note": "'투석 중인 환자는 단백질 섭취량을 1.0-1.2 g/kg/day로 늘려야 합니다' 문장 근거."
+  },
+  {
+    "id": "water1",
+    "category": "수분 관리",
+    "question": "투석과 투석 사이에 체중이 얼마나 늘어나는 게 안전한가요?",
+    "type": "rag",
+    "expected_source": ["혈액투석_영양식생활관리_2권"],
+    "note": "'투석 간의 이상적인 체중 증가는 2-3 kg이내여야 합니다' 문장 근거."
+  },
+  {
+    "id": "water2",
+    "category": "수분 관리",
+    "question": "하루에 마셔도 되는 물의 양은 어떻게 정하나요?",
+    "type": "rag",
+    "expected_source": ["혈액투석_영양식생활관리_2권"],
+    "note": "'하루 수분섭취 허용량은 대략 하루에 300-500 cc' 문장 근거."
+  },
+  {
+    "id": "eat1",
+    "category": "외식/조리법",
+    "question": "외식할 때 나트륨 섭취를 줄이려면 어떻게 해야 하나요?",
+    "type": "rag",
+    "expected_source": ["혈액투석_영양식생활관리_2권"],
+    "note": "'외식하고 싶은데 무엇을 먹을 수 있나요?' 챕터 근거."
+  },
+  {
+    "id": "eat2",
+    "category": "외식/조리법",
+    "question": "채소를 조리해서 칼륨을 줄이는 방법이 있나요?",
+    "type": "rag",
+    "expected_source": ["혈액투석_영양식생활관리_2권"],
+    "note": "'채소를 얇게 썰어 물에 2시간 이상 담갔다 헹궈서 조리', '끓는 물에 데친 후' 단락 근거."
+  },
+  {
+    "id": "snack1",
+    "category": "외식/조리법",
+    "question": "혈액투석 환자가 먹을 수 있는 간식 레시피를 알려주세요.",
+    "type": "rag",
+    "expected_source": ["혈액투석환자를_위한_간식"],
+    "note": "슈가토스트·러스크·사과조림 등 구체적 간식 레시피 목록 근거."
+  },
+  {
+    "id": "fruit1",
+    "category": "과일·채소 주의사항",
+    "question": "말린 과일은 생과일보다 칼륨이 더 많나요?",
+    "type": "rag",
+    "expected_source": ["혈액투석_영양식생활관리_2권"],
+    "note": "'말린 과일(건과일)의 경우 신선한 과일 보다 칼륨함량이 2배 이상 높으므로' 문장 근거."
+  },
+  {
+    "id": "fruit2",
+    "category": "과일·채소 주의사항",
+    "question": "통조림 과일은 먹어도 괜찮은가요?",
+    "type": "rag",
+    "expected_source": ["혈액투석_영양식생활관리_2권"],
+    "note": "'통조림 과일의 경우 칼륨 함량이 낮아 섭취 가능하지만 통조림 시럽은 제외' 문장 근거."
+  },
+  {
+    "id": "ckd1",
+    "category": "일반 (콩팥병 개요)",
+    "question": "만성콩팥병은 단계가 어떻게 나뉘나요?",
+    "type": "rag",
+    "expected_source": ["만성콩팥병_환자_식사요법"],
+    "note": "사구체여과율 기준 1~5단계 표 근거."
+  },
+  {
+    "id": "ckd2",
+    "category": "일반 (콩팥병 개요)",
+    "question": "콩팥이 우리 몸에서 하는 일이 무엇인가요?",
+    "type": "rag",
+    "expected_source": ["콩팥병_환자를_위한_안내서"],
+    "note": "'콩팥은 혈액 내 노폐물과 불필요한 수분을 제거하여 소변을 만듭니다' 등 콩팥 기능 설명 근거."
+  },
+  {
+    "id": "food1",
+    "category": "특정 재료 질문",
+    "question": "바나나 먹어도 되나요?",
+    "type": "food_db",
+    "expected_food_prefix": "바나나, 생것",
+    "note": "'말린' 등 상태어가 없으면 STATE_KW 매칭이 없어 '생것'으로 폴백해야 한다(find_food 우선순위 규칙)."
+  },
+  {
+    "id": "food2",
+    "category": "특정 재료 질문",
+    "question": "말린 바나나 먹어도 되나요?",
+    "type": "food_db",
+    "expected_food_prefix": "바나나, 동결건조",
+    "note": "STATE_KW['말린'] = ('말린것','건조','동결건조','반건조') 매칭 — DB에 '말린것'은 없고 '동결건조'가 있어 그쪽으로 매칭돼야 한다."
+  },
+  {
+    "id": "food3",
+    "category": "특정 재료 질문",
+    "question": "시금치 많이 먹으면 안 되나요?",
+    "type": "food_db",
+    "expected_food_prefix": "시금치, 생것",
+    "note": "상태어 없음 -> '생것' 폴백."
+  },
+  {
+    "id": "food4",
+    "category": "특정 재료 질문",
+    "question": "통조림 복숭아 먹어도 되나요?",
+    "type": "food_db",
+    "expected_food_prefix": "복숭아, 백도, 통조림",
+    "note": "generic-category 세그먼트 오매칭 회귀 테스트(2026-08-13) — '과일'을 _GENERIC_CATEGORY_SEGMENTS로 제외한 뒤에도 '복숭아'처럼 구체적인 재료명은 계속 food_db로 정상 라우팅돼야 한다. STATE_KW['통조림']=('통조림',) 매칭."
+  },
+  {
+    "id": "food5",
+    "category": "특정 재료 질문",
+    "question": "사과 먹어도 되나요?",
+    "type": "food_db",
+    "expected_food_prefix": "사과, 생것",
+    "note": "generic-category 세그먼트 오매칭 회귀 테스트(2026-08-13) — '사과'처럼 구체적인 첫 세그먼트 재료명은 _GENERIC_CATEGORY_SEGMENTS 필터(비-첫 세그먼트에만 적용)의 영향을 받지 않고 계속 food_db로 정상 라우팅돼야 한다."
+  },
+  {
+    "id": "veg1",
+    "category": "과일·채소 주의사항",
+    "question": "채소는 얼마나 먹어도 되나요?",
+    "type": "rag",
+    "expected_source": ["혈액투석_영양식생활관리_2권"],
+    "note": "generic-category 세그먼트 오매칭 회귀 테스트(2026-08-13) — '채소'가 비-첫 세그먼트(예: '과자, 크래커, 채소')로 오매칭돼 food_db로 잘못 라우팅되던 것을 고침. '과일과 채소 섭취량을 적절하게 섭취' 문장 근거로 RAG 라우팅 검증."
+  },
+  {
+    "id": "fish1",
+    "category": "특정 재료 질문",
+    "question": "생선은 얼마나 드셔도 되나요?",
+    "type": "rag",
+    "expected_source": ["콩팥병_환자를_위한_안내서"],
+    "note": "generic-category 세그먼트 오매칭 회귀 테스트(2026-08-13) — '생선'이 비-첫 세그먼트(예: '샌드위치, 생선')로 오매칭돼 food_db로 잘못 라우팅되던 것을 고침. '닭고기, 생선, 달걀과 같은 육식을 너무 많이 드시지 마십시오' 문장 근거로 RAG 라우팅 검증."
+  },
+  {
+    "id": "oos1",
+    "category": "out-of-scope",
+    "question": "오늘 서울 날씨 어때?",
+    "type": "out_of_scope"
+  },
+  {
+    "id": "oos2",
+    "category": "out-of-scope",
+    "question": "어제 축구 경기 결과 알려줘",
+    "type": "out_of_scope"
+  },
+  {
+    "id": "oos3",
+    "category": "out-of-scope",
+    "question": "요즘 비트코인 시세가 어떻게 되나요?",
+    "type": "out_of_scope"
+  },
+  {
+    "id": "oos4",
+    "category": "out-of-scope",
+    "question": "다음 주 로또 번호 추천해줘",
+    "type": "out_of_scope"
+  },
+  {
+    "id": "oos5",
+    "category": "out-of-scope",
+    "question": "재미있는 영화 추천해줘",
+    "type": "out_of_scope"
+  }
+]
