@@ -13,7 +13,7 @@
 | `POST /generate_day` | 하루 세 끼 연속 생성 |
 | `POST /recipe` | 조리법 LLM 편집 |
 | `POST /tts` | 조리법 음성 변환 |
-| `POST /chat` | 투석·콩팥병 영양 RAG 챗봇 (근거 자료 기반 질의응답) |
+| `POST /chat` | 투석·콩팥병 영양 RAG 챗봇 (근거 자료 기반 질의응답 + 멀티턴 음식 후속 질문) |
 | `POST /auth/signup`, `/auth/login` | 회원 기능 (Neon Postgres) |
 
 전체 스펙은 서버 실행 후 `/docs` 에서 확인할 수 있습니다.
@@ -25,6 +25,10 @@
 - **영양 질의응답**: RAG 챗봇(`FOOK_rag_chatbot.py`) — 대한신장학회 등 자료를 임베딩한
   `data/FOOK_rag_kb.json`에서 관련 근거를 찾아 답변. 특정 재료의 칼륨/인 질문은 RAG 대신
   영양DB(`FOOK_adjust_levers.py`)를 직접 조회해 수치 판정은 코드가, 설명 문장만 LLM이 담당한다.
+  라우팅은 `find_food()`(특정 재료) → 결정론적 scope gate(도메인 밖 질문은 임베딩/LLM 호출 없이
+  즉시 차단) → RAG(Top-10 후보 → 유사도 게이트 → 어휘 재정렬 → Top-5) 순서. `ChatReq.context_food`
+  (선택, 하위호환)로 직전 답변의 재료명 하나만 클라이언트가 되돌려 보내면 "그럼 얼마나?" 같은
+  한 턴짜리 후속 질문도 처리한다 — 서버는 상태를 갖지 않고 매 요청마다 검증만 한다.
   지식베이스를 다시 만들려면 `FOOK_build_rag_kb.py` 참고(원본 텍스트는 저장소에 포함하지 않음).
 - **영양 기준**: 대한신장학회 투석환자 영양관리 지침 기반
 - **DB**: Neon Postgres (회원·저장 식단·즐겨찾기)
