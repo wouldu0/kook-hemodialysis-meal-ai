@@ -180,13 +180,32 @@ def _rerank(question, hits):
     return scored
 
 
+# (2026-08-14 wording hardening) 실제 사용 피드백: 결론이 뒤로 밀리고, 카테고리 질문에는
+# 구체적 예시가 안 나오거나(또는 반대로 근거 없이 지어내고), 매 답변에 "의료진과 상담하세요"가
+# 상투적으로 붙고, 끼니 계획 질문엔 이 앱이 실제로 가진 AI 식단 생성 기능(POST /generate,
+# 프론트 표기 "AI 식단 생성") 언급 없이 막연한 원론만 나온다는 지적이 있었다. 아래 규칙은 그
+# 문제들을 wording 차원에서 고친 것 — 검색/게이트/등급 로직은 전혀 건드리지 않는다(그건 여전히
+# retrieve()/_relevant()/_rerank()/find_food()/food_lookup_answer()의 판정 로직이 코드로
+# 확정한다. 이 SYSTEM은 "말하는 방식"만 바꾼다).
 SYSTEM = (
-    "너는 혈액투석 환자를 위한 영양 정보 안내 챗봇이다. "
-    "반드시 아래 [참고 자료]에 있는 내용만 근거로 답하고, 참고 자료에 없는 내용은 "
-    "'제공된 자료에서 확인할 수 없다'고 말해라 — 지어내지 마라. "
-    "특정 환자의 검사 수치나 약물처럼 개인별로 다른 판단이 필요한 질문에는 "
-    "일반적인 원칙만 설명하고, 반드시 담당 의료진·영양사와 상담하도록 안내해라. "
-    "친절하고 간결한 한국어로, 3~5문장 이내로 답하라."
+    "너는 혈액투석 환자를 위한 영양 정보 안내 챗봇이다. 아래 규칙을 지켜 답하라.\n"
+    "1) 결론부터: 첫 문장에 질문에 대한 직접적인 답(결론)을 먼저 말하고, 그다음에 이유·근거를 "
+    "덧붙여라. 결론을 뒤로 미루지 마라.\n"
+    "2) 근거: 반드시 [참고 자료]/[영양DB 실측 자료]에 실제로 있는 내용만 근거로 답하라. 구체적인 "
+    "음식 이름·예시는 그 안에 실제로 등장하는 것만 들어라 — 참고 자료에 없는 음식 이름을 예시로 "
+    "지어내지 마라. 자료에 적절한 예시가 없으면 '자료에 구체적인 예시는 없지만'처럼 솔직히 말하고, "
+    "자료가 뒷받침하는 원칙 수준의 안내만 하라. 아무 근거도 없으면 '제공된 자료에서 확인할 수 "
+    "없다'고 말해라.\n"
+    "3) 출처를 문장 안에 다시 쓰지 마라(예: '~자료에 따르면', '[출처: OO]' 같은 표현 금지) — "
+    "출처는 화면에 답변과 별도로 이미 표시된다.\n"
+    "4) 의료진·영양사 상담 안내는 아껴 써라 — 약물, 진단, 개별 검사 수치 해석, 응급·고위험 증상처럼 "
+    "실제로 개인별 판단이 필요한 질문에서만 짧게 언급하고, 일반적인 영양 원칙 질문에는 매번 "
+    "습관적으로 붙이지 마라.\n"
+    "5) 길이: 보통 2~4문장, 아무리 길어도 6문장을 넘기지 말고, 같은 내용을 다른 말로 반복하지 마라.\n"
+    "6) 오늘 뭘 먹을지/끼니 메뉴를 어떻게 짤지 묻는 질문에는, 자료가 뒷받침하는 일반 원칙을 짧게 "
+    "안내한 뒤 이 앱의 'AI 식단 생성' 기능을 쓰면 실제 끼니 메뉴를 만들어볼 수 있다고 안내해라 — "
+    "이 챗봇이 그 사람만을 위한 구체적 메뉴를 지금 정해주는 것처럼 말하지 마라.\n"
+    "친절하고 간결한 한국어로 답하라."
 )
 
 
@@ -449,19 +468,29 @@ def food_lookup_answer(question, food_name, weight=None, consumed=None, meals_le
         "'남은 나트륨 예산' 수치를 새로 만들어내지 마라 — 그런 수치는 계산되지 않았다)."
         if na_serving is not None else ""
     )
+    # (2026-08-14 wording hardening) "결론이 반복 설명 아래 묻힌다"는 피드백 대응: 결론을
+    # 맨 앞으로 오게 하고, 개인화된 경우엔 LLM이 [최종 판정] 문구를 글자 그대로 다시 쓰지 않게
+    # 한다 — 어차피 답변 끝에 코드가 "▶ 결론: {verdict}"를 안전장치로 못박아 붙이므로(아래,
+    # 이 append 자체는 그대로 유지), LLM 본문에서까지 같은 문장을 그대로 반복하면 같은 결론이
+    # 두 번 찍혀 나온다. LLM은 "결론과 같은 취지로 시작하되 그 문구를 토씨 하나 안 틀리고 다시
+    # 쓰지는 마라"는 지시만 받는다 — 판정을 뒤집지 말라는 안전 지시는 그대로 유지한다.
     instruction = (
-        "위 [영양DB 실측 자료]의 숫자를 우선 근거로 이 재료가 저/중/고칼륨 중 어디에 속하는지와 "
-        "혈액투석 환자가 어떻게 섭취하면 좋을지 안내해라. [관련 임상 자료 발췌]는 조리법·주의사항 "
-        "같은 보완 정보로만 참고하고, 그 안에 이 상황과 무관한 내용이 있으면 무시해라. "
-        "숫자를 임의로 바꾸거나 새로 지어내지 마라." + na_instruction
+        "다음 순서로 짧게 답해라: (1) 첫 문장에 결론 — 이 재료가 저/중/고칼륨 중 무엇인지와 "
+        "혈액투석 환자에게 지금 괜찮은지. (2) 1회 섭취 기준량 기준 핵심 수치(위 [영양DB 실측 자료]에 "
+        "있는 것만, 숫자를 새로 만들거나 바꾸지 마라). (3) 필요하면 조리법·주의사항 팁 한 줄만 "
+        "([관련 임상 자료 발췌] 중 이 재료와 실제로 관련 있는 것만 — 무관하면 생략). "
+        "전체 2~3문장을 넘기지 말고, 같은 말을 반복하지 마라." + na_instruction
     )
     if personalized:
         instruction = (
             f"[최종 판정]은 이미 코드가 계산을 마친 확정된 결론이다 — 절대 네가 숫자를 다시 비교하거나 "
-            f"판정을 뒤집지 마라. 답변은 반드시 '{verdict}'라는 결론으로 끝나야 한다. "
-            "그 위의 [오늘 이 환자의 실제 섭취 현황] 숫자를 근거로 왜 그런 결론인지 설명하고, "
-            "[관련 임상 자료 발췌]에 말린 과일·조리법 등 이 재료 섭취에 실제로 도움되는 주의사항이 "
-            "있으면 짧게 덧붙여라(무관하면 무시). 숫자를 임의로 바꾸거나 새로 지어내지 마라." + na_instruction
+            f"판정을 뒤집지 마라. 답변 순서: (1) 결론과 같은 취지의 문장으로 시작해라(취지: "
+            f"'{verdict}' — 반대로 말하면 안 된다). (2) 그 아래 [오늘 이 환자의 실제 섭취 현황] 숫자를 "
+            "근거로 왜 그런 결론인지 1~2문장으로 설명해라. (3) [관련 임상 자료 발췌]에 말린 과일·조리법 "
+            "등 이 재료 섭취에 실제로 도움되는 주의사항이 있으면 짧게 한 줄만 덧붙여라(무관하면 생략). "
+            "화면에는 네 답변 뒤에 최종 결론 문구가 자동으로 한 번 더 별도로 표시되니, 너는 그 문구를 "
+            "글자 그대로 다시 쓰지 말고 자연스러운 설명으로 답을 마무리해라. 숫자를 임의로 바꾸거나 "
+            "새로 지어내지 마라." + na_instruction
         )
     prompt = (f"[영양DB 실측 자료]\n{facts}\n\n[관련 임상 자료 발췌]\n{rag_block}\n\n"
               f"[환자 질문]\n{question}\n\n{instruction}")
@@ -563,29 +592,72 @@ def _scope_norm(s):
     return _SCOPE_WS_RE.sub(' ', s).strip()
 
 
+# 2026-08-14 추가 — "저녁 뭐 먹지?" 같은 자연스러운 끼니 계획 질문은 DOMAIN_TERMS에
+# 걸리는 단어가 하나도 없어 지금까지 'unrelated'로 오분류됐다('식단'/'식사'/'끼니'가 이미
+# 포함된 문장만 우연히 통과). 문제는 '아침'/'점심'/'저녁'이 그 자체로는 음식과 무관한
+# 문맥(날씨/약속/회의/드라마/운동)에도 똑같이 쓰인다는 것 — 그래서 이 세 단어만으로는
+# 절대 충분 신호로 보지 않고, 반드시 "무엇을 먹는지" 의도가 드러나는 표현과 같이 나올
+# 때만 in-scope로 인정한다. '추천'은 의도적으로 MEAL_INTENT_TERMS에서 뺐다 — "저녁 영화
+# 추천해줘"/"저녁 로또 번호 추천해줘"처럼 '추천'은 음식이 아닌 무엇에도 똑같이 붙을 수
+# 있는 범용 동사라 오탐 위험이 크다("뭐 먹"/"메뉴"처럼 먹는 것 자체를 가리키는 표현만
+# 채택). 반면 '한 끼'/'한끼'는 '아침'/'점심'/'저녁'과 달리 그 자체가 이미 "식사 한 번"을
+# 뜻하는 명사라 다른 문맥(날씨·약속 등)에 쓰이는 일이 사실상 없다 — DOMAIN_TERMS의
+# '끼니'와 성격이 같다. 그래서 '한 끼'/'한끼'는 별도로 두고 '추천'과만 결합해도(예: "한 끼
+# 추천해줘") in-scope로 인정한다.
+MEAL_TIME_TERMS = ['아침', '점심', '저녁']
+MEAL_REFERENCE_TERMS = ['한 끼', '한끼']
+MEAL_INTENT_TERMS = [
+    '뭐 먹', '뭐먹', '먹지', '먹을까', '먹으면', '먹는 게', '챙겨 먹', '메뉴',
+]
+
+
+def _is_meal_planning_query(q):
+    """MEAL_TIME_TERMS/MEAL_REFERENCE_TERMS + MEAL_INTENT_TERMS 조합만 True — 끼니
+    시간대 단어 단독으로는 절대 충분하지 않다(위 주석 참고). q는 이미 _scope_norm()을
+    거친 문자열이어야 한다."""
+    has_time = any(t in q for t in MEAL_TIME_TERMS)
+    has_ref = any(t in q for t in MEAL_REFERENCE_TERMS)
+    if not (has_time or has_ref):
+        return False
+    if any(t in q for t in MEAL_INTENT_TERMS):
+        return True
+    # '한 끼'/'한끼'는 그 자체가 이미 식사를 가리키므로(위 주석) '추천'과만 결합해도 충분 —
+    # 단, 이 완화는 MEAL_REFERENCE_TERMS에만 적용하고 애매한 MEAL_TIME_TERMS에는 적용하지
+    # 않는다("저녁 로또 번호 추천해줘"가 통과하면 안 되므로).
+    return has_ref and '추천' in q
+
+
 ScopeResult = namedtuple('ScopeResult', ['verdict', 'reason'])
 
 
 def classify_scope(question):
     """이 질문이 KOOK(혈액투석 영양) 도메인 IN_SCOPE인지 OUT_OF_SCOPE인지 판정한다.
     scope_gate_experiment.py의 rule_verdict()/rule_gate_binary()(Method A, mixed_default=True/
-    no_signal_default=False로 검증된 그대로)를 production용으로 그대로 옮긴 것 — 새 규칙을
-    추가하지 않았다. 4-way 내부 신호(has_domain/has_procedure/has_redflag)를 아래처럼
-    이진 IN_SCOPE/OUT_OF_SCOPE로 접는다:
+    no_signal_default=False로 검증된 그대로)를 production용으로 그대로 옮긴 것에 2026-08-14
+    끼니 계획 신호(has_meal_planning) 하나만 추가했다. 5-way 내부 신호(has_domain/
+    has_procedure/has_redflag/has_meal_planning)를 아래처럼 이진 IN_SCOPE/OUT_OF_SCOPE로
+    접는다:
       - has_procedure (투석 시술/장비/보험 신호) -> OUT_OF_SCOPE
-        ('dialysis_procedure_not_nutrition') — domain 신호가 같이 있어도 우선 적용.
+        ('dialysis_procedure_not_nutrition') — domain/meal_planning 신호가 같이 있어도 우선 적용.
       - has_redflag and not has_domain -> OUT_OF_SCOPE ('other_medical_treatment')
-        (감기약/인슐린/항암 등 약물·타 치료 영역, domain 신호 전혀 없음).
+        (감기약/인슐린/항암 등 약물·타 치료 영역, domain 신호 전혀 없음). has_meal_planning은
+        이 판정에 관여하지 않는다 — "저녁에 타이레놀 먹어도 돼?"/"점심에 인슐린 얼마나
+        맞아?"처럼 끼니 시간대 단어가 우연히 같이 있어도 반드시 이 분기에서 먼저 걸러져야
+        하기 때문에, has_domain과 달리 has_meal_planning은 이 조건의 예외 사유로 넣지 않았다
+        (즉 아래 순서대로 이 분기가 먼저 평가되므로 has_meal_planning이 True여도 무관).
       - has_domain and not has_redflag -> IN_SCOPE ('dialysis_nutrition').
       - has_domain and has_redflag (MIXED) -> IN_SCOPE ('mixed_intent_default_pass')
         (recall 최우선 가중치에 따른 기본값 — "투석 중인데 감기약 먹어도 돼?" 같은 위험
         사례는 알려진 한계로 남겨두고 이번 작업에서 새 규칙으로 "고치지" 않는다, 작업 지시
         참고 — Method C가 이를 다루는 대안으로 검토됐으나 기각됨).
+      - (위 네 분기에 모두 안 걸리고) has_meal_planning -> IN_SCOPE ('meal_planning_intent')
+        ("저녁 뭐 먹지?" 등 — DOMAIN_TERMS에 걸리는 단어가 없는 자연스러운 끼니 계획 질문).
       - 신호 없음(NO_SIGNAL) -> OUT_OF_SCOPE ('unrelated') — 일반 잡담 기본 거부."""
     q = _scope_norm(question)
     has_domain = any(t in q for t in DOMAIN_TERMS)
     has_procedure = any(t in q for t in DIALYSIS_PROCEDURE_TERMS)
     has_redflag = any(t in q for t in RED_FLAG_TERMS)
+    has_meal_planning = _is_meal_planning_query(q)
 
     if has_procedure:
         return ScopeResult(OUT_OF_SCOPE, 'dialysis_procedure_not_nutrition')
@@ -595,6 +667,8 @@ def classify_scope(question):
         return ScopeResult(IN_SCOPE, 'dialysis_nutrition')
     if has_domain and has_redflag:
         return ScopeResult(IN_SCOPE, 'mixed_intent_default_pass')
+    if has_meal_planning:
+        return ScopeResult(IN_SCOPE, 'meal_planning_intent')
     return ScopeResult(OUT_OF_SCOPE, 'unrelated')
 
 
@@ -646,7 +720,15 @@ def answer(question, weight=None, consumed=None, meals_left=None, top_k=5, model
     reranked = _rerank(question, relevant)   # 게이트 통과분만 재정렬 — 게이트 결과 자체는 안 바뀜
     context_hits = reranked[:RAG_CONTEXT_MAX]
     context = "\n\n".join(f"[{h['source']}]\n{h['text']}" for h in context_hits)
-    prompt = f"[참고 자료]\n{context}\n\n[환자 질문]\n{question}"
+    # (2026-08-14 wording hardening) SYSTEM의 일반 규칙(결론 먼저/근거 안의 예시만/출처 문장 내
+    # 반복 금지)을 이 호출에서도 한 번 더 짧게 못박는다 — food_lookup_answer()가 SYSTEM +
+    # 호출별 instruction을 이중으로 쓰는 것과 같은 방식(단일 지점 실패에 덜 취약하게). 검색된
+    # 청크(context)나 게이트/재정렬 결과 자체는 전혀 건드리지 않는다 — 프롬프트 텍스트만 추가.
+    prompt = (
+        f"[참고 자료]\n{context}\n\n[환자 질문]\n{question}\n\n"
+        "위 [참고 자료]에 실제로 있는 내용만 근거로, 결론부터 2~4문장으로 답해라. 참고 자료에 없는 "
+        "구체적인 음식 이름·수치를 예시로 지어내지 마라."
+    )
     client = _client()
     resp = client.chat.completions.create(
         model=model,

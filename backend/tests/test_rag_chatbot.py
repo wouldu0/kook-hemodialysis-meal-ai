@@ -567,3 +567,266 @@ def test_answer_in_scope_question_still_uses_rag_min_score_gate_and_rerank(monke
     text, sources = C.answer(question)
     assert text == '칼륨이 많은 채소를 주의하세요.'
     assert sources == ['good_doc']   # RAG_MIN_SCORE 미만인 noise_doc은 여전히 걸러짐(scope gate와 무관)
+
+
+# ═══════════════ 9) 답변 문구(wording) 하드닝 회귀 테스트 (2026-08-14) ══════════════
+# 이 블록은 SYSTEM/instruction/prompt 문자열을 손댄 이후에도 (a) 안전 불변식(결론은 코드가
+# 확정, LLM은 절대 못 뒤집음), (b) scope/retrieval 라우팅, (c) 영양DB 수치 자체가 전혀
+# 바뀌지 않았는지를 구조적으로(정확한 문자열 그대로가 아니라 "포함 여부"·"동작"으로) 검증한다.
+# 정확한 카피 문구를 assert하면 문구를 다듬을 때마다 테스트가 깨지므로 일부러 피한다.
+
+class _SpyChatCompletions:
+    """chat.completions.create()에 실제로 전달된 messages를 기록하는 스파이(응답은 고정)."""
+
+    def __init__(self, content):
+        self._content = content
+        self.calls = []
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        return _FakeChatResp(self._content)
+
+
+class SpyClient:
+    """FakeClient와 같은 역할이지만 chat.completions.create()에 전달된 인자를 캡처한다."""
+
+    def __init__(self, query_vec=None, chat_content='(테스트용 LLM 응답)'):
+        self.embeddings = _FakeEmbeddings(query_vec if query_vec is not None else [0.0] * 1536)
+        self._spy_completions = _SpyChatCompletions(chat_content)
+        self.chat = type('C', (), {'completions': self._spy_completions})()
+
+
+def test_food_lookup_answer_still_forbids_verdict_override_and_number_invention(monkeypatch, real_nut):
+    # instruction 문구를 새로 썼지만(결론-먼저 구조로), "판정을 뒤집지 마라"/"숫자를 임의로
+    # 바꾸지 마라" 같은 안전 지시 자체는 여전히 LLM에게 전달돼야 한다.
+    spy = SpyClient(chat_content='임의의 LLM 응답')
+    monkeypatch.setattr(C, 'retrieve', lambda q, top_k=3: [])
+    monkeypatch.setattr(C, '_client', lambda: spy)
+
+    consumed = {'E': 0, 'protein': 0, 'K': 0, 'P': 0, 'Na': 0, 'Na_season': 0}
+    text, sources = C.food_lookup_answer('바나나 먹어도 되나요?', '바나나, 생것',
+                                          weight=60, consumed=consumed)
+    call = spy._spy_completions.calls[0]
+    user_msg = next(m['content'] for m in call['messages'] if m['role'] == 'user')
+    assert '판정을 뒤집' in user_msg   # 결론 재파생/역전 금지 지시가 여전히 존재
+    assert '숫자' in user_msg and ('바꾸' in user_msg or '지어내' in user_msg)   # 수치 임의 변경/조작 금지
+    # 최종 화면 텍스트는 여전히 코드가 계산한 결론으로 끝난다(문구 변경과 무관하게 불변).
+    assert text.endswith('▶ 결론: 지금 더 드셔도 됩니다')
+
+
+def test_food_lookup_answer_numeric_facts_unchanged_in_prompt(monkeypatch, real_nut):
+    # SYSTEM/instruction 문구를 바꿔도 facts(코드가 계산한 K/P/Na 수치·등급)는 손대지 않았다 —
+    # LLM에게 전달되는 프롬프트 안의 [영양DB 실측 자료] 숫자가 실제 DB 조회값과 정확히 일치하는지
+    # 직접 확인한다(오징어, 생것 — 100g당 칼륨/등급을 real_nut에서 직접 재계산해 대조).
+    ing_nut = real_nut[0]
+    food_name = '오징어, 생것'
+    assert food_name in ing_nut, 'DB에 해당 재료명이 있어야 이 테스트가 의미 있음'
+    k100 = ing_nut[food_name]['K']
+    serving = C.SERVING_G.get(ing_nut[food_name].get('group'), C.DEFAULT_SERVING_G)
+    k_serving = k100 * serving / 100
+    grade = C._grade(k_serving)
+
+    spy = SpyClient(chat_content='임의의 LLM 응답')
+    monkeypatch.setattr(C, 'retrieve', lambda q, top_k=3: [])
+    monkeypatch.setattr(C, '_client', lambda: spy)
+
+    text, sources = C.food_lookup_answer('오징어 먹어도 돼?', food_name)
+    call = spy._spy_completions.calls[0]
+    user_msg = next(m['content'] for m in call['messages'] if m['role'] == 'user')
+    assert f'{k100:.0f}mg' in user_msg
+    assert f'{k_serving:.0f}mg' in user_msg
+    assert grade in user_msg
+
+
+def test_system_prompt_still_instructs_no_fabricated_examples():
+    # 문구는 재작성됐지만 "참고 자료에 없는 내용/예시를 지어내지 마라"는 취지의 지시는
+    # SYSTEM 어딘가에 여전히 있어야 한다(카테고리 질문에서 허위 예시 방지).
+    assert '지어내' in C.SYSTEM
+
+
+def test_system_prompt_discourages_default_medical_disclaimer_boilerplate():
+    # 매 답변마다 "의료진과 상담하세요"를 습관적으로 붙이지 말라는 취지가 SYSTEM에 있어야 한다
+    # (기존에는 "반드시... 상담하도록 안내해라"였던 것을 "아껴 써라/매번 붙이지 마라"로 완화).
+    assert ('아껴' in C.SYSTEM) or ('매번' in C.SYSTEM and '상담' in C.SYSTEM)
+
+
+def test_system_prompt_mentions_real_meal_generation_feature_by_name():
+    # 끼니 계획 질문에 대해 이 앱의 실제 기능(프론트 표기 "AI 식단 생성")을 안내하라는 지시가
+    # 있어야 한다 — 가짜 기능을 지어내지 않고 실제 /generate 기능의 화면 표기 그대로 참조한다.
+    assert 'AI 식단 생성' in C.SYSTEM
+
+
+# ── OOS 3문항(Step 3) 회귀: retrieve()/LLM 호출 0회, sources=[] 유지 ────────────
+@pytest.mark.parametrize('question', [
+    '감기약 먹어도 되나요?',
+    '암 치료는 어떻게 하나요?',
+    '다음 주 로또 번호 추천해줘',
+])
+def test_named_oos_questions_never_call_retrieve_or_llm(monkeypatch, question):
+    monkeypatch.setattr(C, 'find_food', lambda q: None)
+
+    def _fail_retrieve(q, top_k=5):
+        raise AssertionError(f'{question!r}: OUT_OF_SCOPE인데 retrieve()가 호출됨')
+    monkeypatch.setattr(C, 'retrieve', _fail_retrieve)
+
+    def _fail_client():
+        raise AssertionError(f'{question!r}: OUT_OF_SCOPE인데 LLM이 호출됨')
+    monkeypatch.setattr(C, '_client', _fail_client)
+
+    text, sources = C.answer(question)
+    assert text == C.OUT_OF_SCOPE_ANSWER
+    assert sources == []
+    assert C.classify_scope(question).verdict == C.OUT_OF_SCOPE
+
+
+def test_named_meal_planning_question_scope_and_routing_unchanged():
+    # 2026-08-14 scope gate 일반화 이후: "저녁 뭐 먹지?"는 이제 meal_planning_intent 신호로
+    # IN_SCOPE로 판정되어 실제로 RAG 경로(및 SYSTEM 문구)에 도달한다 — 아래 10번 블록
+    # (test_meal_planning_scope_gate.py 성격의 테스트)에서 이 변경을 자세히 검증한다.
+    # find_food()는 여전히 이 질문에 매칭되지 않는다(구체적 재료명이 없으므로) — 그 부분만
+    # 이 테스트에서 계속 고정한다.
+    assert C.classify_scope('저녁 뭐 먹지?').verdict == C.IN_SCOPE
+    assert C.find_food('저녁 뭐 먹지?') is None
+
+
+def test_answer_rag_path_prompt_still_grounds_only_in_retrieved_context(monkeypatch):
+    # answer()의 RAG 경로 프롬프트 템플릿이 바뀌었지만, 여전히 검색된 context 텍스트 자체를
+    # 프롬프트에 그대로 포함해 LLM에게 넘겨야 한다(문구만 추가됐지 근거 자료가 빠지면 안 됨).
+    monkeypatch.setattr(C, 'find_food', lambda q: None)
+    hits = [{'source': 'good_doc', 'text': '칼륨이 많은 채소는 시금치입니다.', 'score': 0.5}]
+    monkeypatch.setattr(C, 'retrieve', lambda q, top_k=5: hits)
+    spy = SpyClient(chat_content='답변')
+    monkeypatch.setattr(C, '_client', lambda: spy)
+
+    question = '혈액투석 환자가 피해야 할 고칼륨 채소는 어떤 게 있나요?'
+    text, sources = C.answer(question)
+    call = spy._spy_completions.calls[0]
+    user_msg = next(m['content'] for m in call['messages'] if m['role'] == 'user')
+    assert '칼륨이 많은 채소는 시금치입니다.' in user_msg   # 검색된 근거 텍스트가 그대로 전달됨
+    assert 'good_doc' in user_msg   # 출처 라벨도 그대로 포함
+
+
+# ═══════════ 10) 끼니 계획(meal-planning) scope gate 일반화 (2026-08-14) ══════════
+# classify_scope()가 "저녁 뭐 먹지?" 같은 자연스러운 끼니 계획 질문을 DOMAIN_TERMS 키워드가
+# 하나도 없다는 이유만으로 OUT_OF_SCOPE 처리하던 gap을 메우는 has_meal_planning 신호에 대한
+# 테스트. 핵심 불변식 셋: (a) 끼니 시간대 단어("아침"/"점심"/"저녁") 단독으로는 절대 통과하지
+# 않는다, (b) '추천'만으로는(끼니 시간대 단어와 결합해도) 통과하지 않는다 — 영화/드라마/로또
+# 등 무엇에나 붙는 범용 추천 요청과 구분하기 위함, (c) red-flag(약물 등) 우선순위는 끼니
+# 시간대 단어가 같이 있어도 절대 흔들리지 않는다. 문장 통째 하드코딩이 아니라 판정
+# 동작(verdict)만 검증한다 — 실제 최종 문구가 아니라 결합 규칙 자체가 맞는지 확인하는 목적.
+
+@pytest.mark.parametrize('question', [
+    '저녁 뭐 먹지?',
+    '점심 뭐 먹을까?',
+    '아침 메뉴 추천해줘',
+    '오늘 저녁 뭐 먹으면 좋을까?',
+    '한 끼 추천해줘',
+    '간단한 저녁 메뉴 알려줘',
+])
+def test_meal_planning_questions_become_in_scope(question):
+    result = C.classify_scope(question)
+    assert result.verdict == C.IN_SCOPE
+    assert result.reason == 'meal_planning_intent'
+
+
+@pytest.mark.parametrize('question', [
+    '저녁 영화 뭐 볼까?',
+    '아침에 비 와?',
+    '저녁 약속 어디서 잡지?',
+    '점심 회의 몇 시야?',
+    '아침 운동 뭐 할까?',
+    '저녁 드라마 추천해줘',        # (b) 끼니 시간대 단어 + '추천'만으로는 불충분
+    '오늘 저녁 로또 번호 추천해줘',  # (b) 동일 — 범용 추천 요청은 여전히 차단돼야 함
+])
+def test_meal_time_word_alone_or_with_bare_recommend_stays_out_of_scope(question):
+    # (a)/(b) 불변식: "아침"/"점심"/"저녁"은 음식과 무관한 문맥(날씨/약속/회의/운동/영화/
+    # 드라마/로또)에도 똑같이 쓰이므로, 먹는 것 자체를 가리키는 표현("뭐 먹"/"메뉴" 등)이
+    # 없으면(설령 '추천'이 있어도) 여전히 OUT_OF_SCOPE여야 한다.
+    result = C.classify_scope(question)
+    assert result.verdict == C.OUT_OF_SCOPE
+
+
+def test_point_in_time_word_medication_question_stays_out_of_scope():
+    # 끼니 시간대 단어와 결합됐지만 실제로는 약 복용 시점을 묻는 질문 — 먹는 대상이 음식이
+    # 아니므로 meal_planning 신호가 없고, 애초에 domain 신호도 없어 OUT_OF_SCOPE(unrelated).
+    result = C.classify_scope('점심에 약 언제 먹어?')
+    assert result.verdict == C.OUT_OF_SCOPE
+
+
+@pytest.mark.parametrize('question', [
+    '저녁에 타이레놀 먹어도 돼?',
+    '점심에 인슐린 얼마나 맞아?',
+])
+def test_redflag_priority_beats_meal_time_word(question):
+    # (c) 불변식: red-flag 약물 용어(타이레놀/인슐린)가 있으면, 끼니 시간대 단어("저녁"/"점심")가
+    # 같이 있어도 domain 신호가 없는 한 반드시 OUT_OF_SCOPE(other_medical_treatment)여야 한다 —
+    # has_redflag and not has_domain 분기가 has_meal_planning보다 우선순위가 높기 때문.
+    result = C.classify_scope(question)
+    assert result.verdict == C.OUT_OF_SCOPE
+    assert result.reason == 'other_medical_treatment'
+
+
+@pytest.mark.parametrize('question,expected_verdict', [
+    ('감기 걸렸을 때 타이레놀 먹어도 되나요?', C.OUT_OF_SCOPE),   # oos12 (hard_medical)
+    ('당뇨병 인슐린 주사는 몇 단위로 놔야 하나요?', C.OUT_OF_SCOPE),  # oos13 (hard_medical)
+    ('암 환자 항암치료 부작용은 어떻게 관리하나요?', C.OUT_OF_SCOPE),  # oos19 (hard_medical)
+    ('갑상선 기능 저하증 약은 하루 중 언제 먹는 게 가장 좋나요?', C.OUT_OF_SCOPE),  # hoos3
+    ('관절염 진통제를 매일 먹어도 위에 부담이 없을까요?', C.OUT_OF_SCOPE),  # hoos4
+])
+def test_existing_hard_medical_oos_still_rejected(question, expected_verdict):
+    # 새 meal_planning 신호를 추가한 뒤에도 기존 hard-medical OOS 문항(끼니 시간대 단어가
+    # 전혀 없는 질문들)은 영향을 받지 않아야 한다 — scope_gate_eval_set.json의
+    # existing_oos_tags(oos12/oos13/oos19)와 new_hard_oos(hoos3/hoos4) 일부를 대표로 확인.
+    assert C.classify_scope(question).verdict == expected_verdict
+
+
+def test_find_food_still_takes_priority_over_meal_planning_signal(real_nut):
+    # 끼니 시간대 단어 + 구체적 재료명이 함께 있는 질문("저녁에 사과 먹어도 돼?")은 여전히
+    # answer()의 find_food()가 scope gate보다 먼저 가로채 food_db 경로로 라우팅돼야 한다
+    # (call order: find_food() -> classify_scope()는 이번 작업에서 손대지 않음).
+    assert C.find_food('저녁에 사과 먹어도 돼?') == '사과, 생것'
+    assert C.find_food('아침에 오징어 먹어도 돼?') == '오징어, 생것'
+
+
+@pytest.mark.parametrize('question', [
+    '저녁 영화 뭐 볼까?',
+    '점심에 약 언제 먹어?',
+    '저녁에 타이레놀 먹어도 돼?',
+    '오늘 저녁 로또 번호 추천해줘',
+])
+def test_meal_context_negative_questions_never_call_retrieve_or_llm(monkeypatch, question):
+    # 새로 도입된 meal_planning 신호가 있는 질문이라도 실제로는 OUT_OF_SCOPE인 위 4개 문항은
+    # 여전히 retrieve()/LLM을 전혀 호출하지 않아야 한다(test_named_oos_questions_...와 동일 패턴).
+    monkeypatch.setattr(C, 'find_food', lambda q: None)
+
+    def _fail_retrieve(q, top_k=5):
+        raise AssertionError(f'{question!r}: OUT_OF_SCOPE인데 retrieve()가 호출됨')
+    monkeypatch.setattr(C, 'retrieve', _fail_retrieve)
+
+    def _fail_client():
+        raise AssertionError(f'{question!r}: OUT_OF_SCOPE인데 LLM이 호출됨')
+    monkeypatch.setattr(C, '_client', _fail_client)
+
+    text, sources = C.answer(question)
+    assert text == C.OUT_OF_SCOPE_ANSWER
+    assert sources == []
+    assert C.classify_scope(question).verdict == C.OUT_OF_SCOPE
+
+
+def test_meal_planning_question_actually_reaches_rag_pipeline(monkeypatch):
+    # "저녁 뭐 먹지?"가 이제 IN_SCOPE이므로 answer()가 실제로 retrieve()까지 도달해야 한다
+    # (OUT_OF_SCOPE_ANSWER로 조기 반환되지 않음) — find_food/retrieve/LLM을 모두 목킹해
+    # 호출 여부와 최종 반환값을 확인.
+    monkeypatch.setattr(C, 'find_food', lambda q: None)
+    calls = {'retrieve': 0}
+
+    def _spy_retrieve(q, top_k=5):
+        calls['retrieve'] += 1
+        return [{'source': 'meal_doc', 'text': '한 끼 식단 구성 예시입니다.', 'score': 0.5}]
+    monkeypatch.setattr(C, 'retrieve', _spy_retrieve)
+    monkeypatch.setattr(C, '_client', lambda: FakeClient(chat_content='AI 식단 생성 기능을 활용해보세요.'))
+
+    text, sources = C.answer('저녁 뭐 먹지?')
+    assert calls['retrieve'] == 1   # RAG 경로에 실제로 도달함(조기 OUT_OF_SCOPE 반환 아님)
+    assert text != C.OUT_OF_SCOPE_ANSWER
+    assert sources == ['meal_doc']
