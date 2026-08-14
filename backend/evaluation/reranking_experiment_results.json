@@ -1,0 +1,1355 @@
+{
+  "RAG_MIN_SCORE": 0.3,
+  "n_rag_questions": 30,
+  "evidence_indices": {
+    "k1": [
+      0
+    ],
+    "k2": [
+      4
+    ],
+    "p1": [
+      5
+    ],
+    "p2": [
+      0
+    ],
+    "na1": [
+      0
+    ],
+    "na2": [
+      1,
+      6
+    ],
+    "prot1": [
+      2,
+      7
+    ],
+    "prot2": [],
+    "water1": [
+      8
+    ],
+    "water2": [
+      3
+    ],
+    "eat1": [
+      4
+    ],
+    "eat2": [
+      0,
+      2
+    ],
+    "snack1": [],
+    "fruit1": [
+      3
+    ],
+    "fruit2": [
+      9
+    ],
+    "ckd1": [
+      1
+    ],
+    "ckd2": [
+      3
+    ],
+    "veg1": [],
+    "fish1": [],
+    "p3": [
+      0
+    ],
+    "trip1": [
+      0
+    ],
+    "alb1": [
+      0
+    ],
+    "bone1": [
+      0
+    ],
+    "itch1": [],
+    "early1": [
+      8
+    ],
+    "snack2": [],
+    "energy1": [
+      3
+    ],
+    "transplant1": [],
+    "kfruit1": [
+      0,
+      4
+    ],
+    "acidosis1": [
+      0
+    ]
+  },
+  "summary_recall": {
+    "baseline": {
+      "recall@1": 0.3333,
+      "recall@3": 0.4333,
+      "recall@5": 0.6333,
+      "recall@10": 0.7667
+    },
+    "dedup": {
+      "recall@1": 0.3333,
+      "recall@3": 0.4333,
+      "recall@5": 0.6333,
+      "recall@10": 0.7667
+    },
+    "diversity_cap2": {
+      "recall@1": 0.3333,
+      "recall@3": 0.4333,
+      "recall@5": 0.5667,
+      "recall@10": 0.7667
+    },
+    "diversity_cap3": {
+      "recall@1": 0.3333,
+      "recall@3": 0.4333,
+      "recall@5": 0.6,
+      "recall@10": 0.7667
+    },
+    "lexical_a0.05": {
+      "recall@1": 0.3333,
+      "recall@3": 0.5333,
+      "recall@5": 0.6333,
+      "recall@10": 0.7667
+    },
+    "lexical_a0.15": {
+      "recall@1": 0.3667,
+      "recall@3": 0.5667,
+      "recall@5": 0.7,
+      "recall@10": 0.7667
+    },
+    "combo_dedup_lex_cap2": {
+      "recall@1": 0.3333,
+      "recall@3": 0.5,
+      "recall@5": 0.5667,
+      "recall@10": 0.7667
+    },
+    "combo_dedup_lex_cap3": {
+      "recall@1": 0.3333,
+      "recall@3": 0.5333,
+      "recall@5": 0.6,
+      "recall@10": 0.7667
+    },
+    "combo_dedup_lex_nocap": {
+      "recall@1": 0.3333,
+      "recall@3": 0.5333,
+      "recall@5": 0.6333,
+      "recall@10": 0.7667
+    }
+  },
+  "regressions_vs_baseline_top5": {
+    "dedup": {
+      "improved": [],
+      "worsened": [],
+      "n_improved": 0,
+      "n_worsened": 0,
+      "n_unchanged": 30
+    },
+    "diversity_cap2": {
+      "improved": [],
+      "worsened": [
+        {
+          "id": "k2",
+          "before": 5,
+          "after": 7
+        },
+        {
+          "id": "water2",
+          "before": 4,
+          "after": 8
+        }
+      ],
+      "n_improved": 0,
+      "n_worsened": 2,
+      "n_unchanged": 28
+    },
+    "diversity_cap3": {
+      "improved": [],
+      "worsened": [
+        {
+          "id": "water2",
+          "before": 4,
+          "after": 8
+        }
+      ],
+      "n_improved": 0,
+      "n_worsened": 1,
+      "n_unchanged": 29
+    },
+    "lexical_a0.05": {
+      "improved": [
+        {
+          "id": "fruit2",
+          "before": 10,
+          "after": 2
+        }
+      ],
+      "worsened": [
+        {
+          "id": "ckd2",
+          "before": 4,
+          "after": 6
+        }
+      ],
+      "n_improved": 1,
+      "n_worsened": 1,
+      "n_unchanged": 28
+    },
+    "lexical_a0.15": {
+      "improved": [
+        {
+          "id": "p1",
+          "before": 6,
+          "after": 4
+        },
+        {
+          "id": "water1",
+          "before": 9,
+          "after": 3
+        },
+        {
+          "id": "fruit2",
+          "before": 10,
+          "after": 1
+        },
+        {
+          "id": "early1",
+          "before": 9,
+          "after": 5
+        }
+      ],
+      "worsened": [
+        {
+          "id": "eat1",
+          "before": 5,
+          "after": 6
+        },
+        {
+          "id": "ckd2",
+          "before": 4,
+          "after": 6
+        }
+      ],
+      "n_improved": 4,
+      "n_worsened": 2,
+      "n_unchanged": 24
+    },
+    "combo_dedup_lex_cap2": {
+      "improved": [
+        {
+          "id": "fruit2",
+          "before": 10,
+          "after": 2
+        }
+      ],
+      "worsened": [
+        {
+          "id": "k2",
+          "before": 5,
+          "after": 7
+        },
+        {
+          "id": "water2",
+          "before": 4,
+          "after": 8
+        },
+        {
+          "id": "ckd2",
+          "before": 4,
+          "after": 6
+        }
+      ],
+      "n_improved": 1,
+      "n_worsened": 3,
+      "n_unchanged": 26
+    },
+    "combo_dedup_lex_cap3": {
+      "improved": [
+        {
+          "id": "fruit2",
+          "before": 10,
+          "after": 2
+        }
+      ],
+      "worsened": [
+        {
+          "id": "water2",
+          "before": 4,
+          "after": 8
+        },
+        {
+          "id": "ckd2",
+          "before": 4,
+          "after": 6
+        }
+      ],
+      "n_improved": 1,
+      "n_worsened": 2,
+      "n_unchanged": 27
+    },
+    "combo_dedup_lex_nocap": {
+      "improved": [
+        {
+          "id": "fruit2",
+          "before": 10,
+          "after": 2
+        }
+      ],
+      "worsened": [
+        {
+          "id": "ckd2",
+          "before": 4,
+          "after": 6
+        }
+      ],
+      "n_improved": 1,
+      "n_worsened": 1,
+      "n_unchanged": 28
+    }
+  },
+  "focus_table_known5_and_new2": {
+    "itch1": {
+      "baseline": null,
+      "dedup": null,
+      "diversity_cap2": null,
+      "diversity_cap3": null,
+      "lexical_a0.05": null,
+      "lexical_a0.15": null,
+      "combo_dedup_lex_cap2": null,
+      "combo_dedup_lex_cap3": null,
+      "combo_dedup_lex_nocap": null
+    },
+    "prot2": {
+      "baseline": null,
+      "dedup": null,
+      "diversity_cap2": null,
+      "diversity_cap3": null,
+      "lexical_a0.05": null,
+      "lexical_a0.15": null,
+      "combo_dedup_lex_cap2": null,
+      "combo_dedup_lex_cap3": null,
+      "combo_dedup_lex_nocap": null
+    },
+    "snack1": {
+      "baseline": null,
+      "dedup": null,
+      "diversity_cap2": null,
+      "diversity_cap3": null,
+      "lexical_a0.05": null,
+      "lexical_a0.15": null,
+      "combo_dedup_lex_cap2": null,
+      "combo_dedup_lex_cap3": null,
+      "combo_dedup_lex_nocap": null
+    },
+    "fish1": {
+      "baseline": null,
+      "dedup": null,
+      "diversity_cap2": null,
+      "diversity_cap3": null,
+      "lexical_a0.05": null,
+      "lexical_a0.15": null,
+      "combo_dedup_lex_cap2": null,
+      "combo_dedup_lex_cap3": null,
+      "combo_dedup_lex_nocap": null
+    },
+    "transplant1": {
+      "baseline": null,
+      "dedup": null,
+      "diversity_cap2": null,
+      "diversity_cap3": null,
+      "lexical_a0.05": null,
+      "lexical_a0.15": null,
+      "combo_dedup_lex_cap2": null,
+      "combo_dedup_lex_cap3": null,
+      "combo_dedup_lex_nocap": null
+    },
+    "veg1": {
+      "baseline": null,
+      "dedup": null,
+      "diversity_cap2": null,
+      "diversity_cap3": null,
+      "lexical_a0.05": null,
+      "lexical_a0.15": null,
+      "combo_dedup_lex_cap2": null,
+      "combo_dedup_lex_cap3": null,
+      "combo_dedup_lex_nocap": null
+    },
+    "snack2": {
+      "baseline": null,
+      "dedup": null,
+      "diversity_cap2": null,
+      "diversity_cap3": null,
+      "lexical_a0.05": null,
+      "lexical_a0.15": null,
+      "combo_dedup_lex_cap2": null,
+      "combo_dedup_lex_cap3": null,
+      "combo_dedup_lex_nocap": null
+    }
+  },
+  "oos_safety_check": [
+    {
+      "id": "oos1",
+      "question": "오늘 서울 날씨 어때?",
+      "top1_score": 0.1941,
+      "gate_pass_baseline": false,
+      "max_lexical_bonus_any_candidate": 0.5,
+      "best_score_after_lexical_a015": 0.2612,
+      "gate_pass_after_lexical_a015": false,
+      "flagged_gate_flip": null
+    },
+    {
+      "id": "oos2",
+      "question": "어제 축구 경기 결과 알려줘",
+      "top1_score": 0.2734,
+      "gate_pass_baseline": false,
+      "max_lexical_bonus_any_candidate": 0.2,
+      "best_score_after_lexical_a015": 0.2734,
+      "gate_pass_after_lexical_a015": false,
+      "flagged_gate_flip": null
+    },
+    {
+      "id": "oos3",
+      "question": "요즘 비트코인 시세가 어떻게 되나요?",
+      "top1_score": 0.1966,
+      "gate_pass_baseline": false,
+      "max_lexical_bonus_any_candidate": 0.2,
+      "best_score_after_lexical_a015": 0.2065,
+      "gate_pass_after_lexical_a015": false,
+      "flagged_gate_flip": null
+    },
+    {
+      "id": "oos4",
+      "question": "다음 주 로또 번호 추천해줘",
+      "top1_score": 0.2719,
+      "gate_pass_baseline": false,
+      "max_lexical_bonus_any_candidate": 0.25,
+      "best_score_after_lexical_a015": 0.3094,
+      "gate_pass_after_lexical_a015": true,
+      "flagged_gate_flip": {
+        "source": "콩팥병_환자를_위한_안내서",
+        "orig_score": 0.271916925907135,
+        "bonus": 0.25,
+        "after_score": 0.3094
+      }
+    },
+    {
+      "id": "oos5",
+      "question": "재미있는 영화 추천해줘",
+      "top1_score": 0.2361,
+      "gate_pass_baseline": false,
+      "max_lexical_bonus_any_candidate": 0.333,
+      "best_score_after_lexical_a015": 0.2639,
+      "gate_pass_after_lexical_a015": false,
+      "flagged_gate_flip": null
+    },
+    {
+      "id": "oos6",
+      "question": "요즘 인기있는 드라마 뭐가 있어요?",
+      "top1_score": 0.1861,
+      "gate_pass_baseline": false,
+      "max_lexical_bonus_any_candidate": 0.2,
+      "best_score_after_lexical_a015": 0.2003,
+      "gate_pass_after_lexical_a015": false,
+      "flagged_gate_flip": null
+    },
+    {
+      "id": "oos7",
+      "question": "제주도 여행 코스 좀 추천해줘",
+      "top1_score": 0.2696,
+      "gate_pass_baseline": false,
+      "max_lexical_bonus_any_candidate": 0.0,
+      "best_score_after_lexical_a015": 0.2696,
+      "gate_pass_after_lexical_a015": false,
+      "flagged_gate_flip": null
+    },
+    {
+      "id": "oos8",
+      "question": "썸타는 사람한테 어떻게 고백해야 할까요?",
+      "top1_score": 0.3195,
+      "gate_pass_baseline": true,
+      "max_lexical_bonus_any_candidate": 0.2,
+      "best_score_after_lexical_a015": 0.3495,
+      "gate_pass_after_lexical_a015": true,
+      "flagged_gate_flip": null
+    },
+    {
+      "id": "oos9",
+      "question": "수능 영어 단어 빨리 외우는 꿀팁 있나요?",
+      "top1_score": 0.2859,
+      "gate_pass_baseline": false,
+      "max_lexical_bonus_any_candidate": 0.0,
+      "best_score_after_lexical_a015": 0.2859,
+      "gate_pass_after_lexical_a015": false,
+      "flagged_gate_flip": null
+    },
+    {
+      "id": "oos10",
+      "question": "파이썬으로 정렬 알고리즘 짜는 법 알려줘",
+      "top1_score": 0.2525,
+      "gate_pass_baseline": false,
+      "max_lexical_bonus_any_candidate": 0.0,
+      "best_score_after_lexical_a015": 0.2525,
+      "gate_pass_after_lexical_a015": false,
+      "flagged_gate_flip": null
+    },
+    {
+      "id": "oos11",
+      "question": "오늘 기분이 좀 별로인데 위로해줄래?",
+      "top1_score": 0.2649,
+      "gate_pass_baseline": false,
+      "max_lexical_bonus_any_candidate": 0.5,
+      "best_score_after_lexical_a015": 0.2848,
+      "gate_pass_after_lexical_a015": false,
+      "flagged_gate_flip": null
+    },
+    {
+      "id": "oos12",
+      "question": "감기 걸렸을 때 타이레놀 먹어도 되나요?",
+      "top1_score": 0.3853,
+      "gate_pass_baseline": true,
+      "max_lexical_bonus_any_candidate": 0.2,
+      "best_score_after_lexical_a015": 0.4105,
+      "gate_pass_after_lexical_a015": true,
+      "flagged_gate_flip": null
+    },
+    {
+      "id": "oos13",
+      "question": "당뇨병 인슐린 주사는 몇 단위로 놔야 하나요?",
+      "top1_score": 0.4161,
+      "gate_pass_baseline": true,
+      "max_lexical_bonus_any_candidate": 0.333,
+      "best_score_after_lexical_a015": 0.4661,
+      "gate_pass_after_lexical_a015": true,
+      "flagged_gate_flip": null
+    },
+    {
+      "id": "oos14",
+      "question": "요즘 코스피 지수 전망이 어때요?",
+      "top1_score": 0.2025,
+      "gate_pass_baseline": false,
+      "max_lexical_bonus_any_candidate": 0.0,
+      "best_score_after_lexical_a015": 0.2025,
+      "gate_pass_after_lexical_a015": false,
+      "flagged_gate_flip": null
+    },
+    {
+      "id": "oos15",
+      "question": "메시랑 호날두 중에 누가 더 잘해요?",
+      "top1_score": 0.2764,
+      "gate_pass_baseline": false,
+      "max_lexical_bonus_any_candidate": 0.2,
+      "best_score_after_lexical_a015": 0.294,
+      "gate_pass_after_lexical_a015": false,
+      "flagged_gate_flip": null
+    },
+    {
+      "id": "oos16",
+      "question": "내일 비 오나요?",
+      "top1_score": 0.2695,
+      "gate_pass_baseline": false,
+      "max_lexical_bonus_any_candidate": 0.5,
+      "best_score_after_lexical_a015": 0.319,
+      "gate_pass_after_lexical_a015": true,
+      "flagged_gate_flip": {
+        "source": "혈액투석_영양식생활관리_2권",
+        "orig_score": 0.24397701025009155,
+        "bonus": 0.5,
+        "after_score": 0.319
+      }
+    },
+    {
+      "id": "oos17",
+      "question": "이번 주말에 볼만한 영화 추천해줘",
+      "top1_score": 0.241,
+      "gate_pass_baseline": false,
+      "max_lexical_bonus_any_candidate": 0.2,
+      "best_score_after_lexical_a015": 0.241,
+      "gate_pass_after_lexical_a015": false,
+      "flagged_gate_flip": null
+    },
+    {
+      "id": "oos18",
+      "question": "너는 이름이 뭐야?",
+      "top1_score": 0.2925,
+      "gate_pass_baseline": false,
+      "max_lexical_bonus_any_candidate": 0.0,
+      "best_score_after_lexical_a015": 0.2925,
+      "gate_pass_after_lexical_a015": false,
+      "flagged_gate_flip": null
+    },
+    {
+      "id": "oos19",
+      "question": "암 환자 항암치료 부작용은 어떻게 관리하나요?",
+      "top1_score": 0.4747,
+      "gate_pass_baseline": true,
+      "max_lexical_bonus_any_candidate": 0.6,
+      "best_score_after_lexical_a015": 0.5599,
+      "gate_pass_after_lexical_a015": true,
+      "flagged_gate_flip": null
+    },
+    {
+      "id": "oos20",
+      "question": "유럽 배낭여행 예산은 얼마나 잡아야 할까요?",
+      "top1_score": 0.2756,
+      "gate_pass_baseline": false,
+      "max_lexical_bonus_any_candidate": 0.167,
+      "best_score_after_lexical_a015": 0.2756,
+      "gate_pass_after_lexical_a015": false,
+      "flagged_gate_flip": null
+    },
+    {
+      "id": "oos21",
+      "question": "스마트폰 배터리 오래 쓰는 법 알려줘",
+      "top1_score": 0.2829,
+      "gate_pass_baseline": false,
+      "max_lexical_bonus_any_candidate": 0.2,
+      "best_score_after_lexical_a015": 0.2979,
+      "gate_pass_after_lexical_a015": false,
+      "flagged_gate_flip": null
+    }
+  ],
+  "method_ranks_all_questions": {
+    "baseline": {
+      "k1": 1,
+      "k2": 5,
+      "p1": 6,
+      "p2": 1,
+      "na1": 1,
+      "na2": 2,
+      "prot1": 3,
+      "prot2": null,
+      "water1": 9,
+      "water2": 4,
+      "eat1": 5,
+      "eat2": 1,
+      "snack1": null,
+      "fruit1": 4,
+      "fruit2": 10,
+      "ckd1": 2,
+      "ckd2": 4,
+      "veg1": null,
+      "fish1": null,
+      "p3": 1,
+      "trip1": 1,
+      "alb1": 1,
+      "bone1": 1,
+      "itch1": null,
+      "early1": 9,
+      "snack2": null,
+      "energy1": 4,
+      "transplant1": null,
+      "kfruit1": 1,
+      "acidosis1": 1
+    },
+    "dedup": {
+      "k1": 1,
+      "k2": 5,
+      "p1": 6,
+      "p2": 1,
+      "na1": 1,
+      "na2": 2,
+      "prot1": 3,
+      "prot2": null,
+      "water1": 9,
+      "water2": 4,
+      "eat1": 5,
+      "eat2": 1,
+      "snack1": null,
+      "fruit1": 4,
+      "fruit2": 10,
+      "ckd1": 2,
+      "ckd2": 4,
+      "veg1": null,
+      "fish1": null,
+      "p3": 1,
+      "trip1": 1,
+      "alb1": 1,
+      "bone1": 1,
+      "itch1": null,
+      "early1": 9,
+      "snack2": null,
+      "energy1": 4,
+      "transplant1": null,
+      "kfruit1": 1,
+      "acidosis1": 1
+    },
+    "diversity_cap2": {
+      "k1": 1,
+      "k2": 7,
+      "p1": 6,
+      "p2": 1,
+      "na1": 1,
+      "na2": 2,
+      "prot1": 3,
+      "prot2": null,
+      "water1": 9,
+      "water2": 8,
+      "eat1": 5,
+      "eat2": 1,
+      "snack1": null,
+      "fruit1": 4,
+      "fruit2": 10,
+      "ckd1": 2,
+      "ckd2": 5,
+      "veg1": null,
+      "fish1": null,
+      "p3": 1,
+      "trip1": 1,
+      "alb1": 1,
+      "bone1": 1,
+      "itch1": null,
+      "early1": 9,
+      "snack2": null,
+      "energy1": 4,
+      "transplant1": null,
+      "kfruit1": 1,
+      "acidosis1": 1
+    },
+    "diversity_cap3": {
+      "k1": 1,
+      "k2": 5,
+      "p1": 7,
+      "p2": 1,
+      "na1": 1,
+      "na2": 2,
+      "prot1": 3,
+      "prot2": null,
+      "water1": 6,
+      "water2": 8,
+      "eat1": 5,
+      "eat2": 1,
+      "snack1": null,
+      "fruit1": 4,
+      "fruit2": 10,
+      "ckd1": 2,
+      "ckd2": 4,
+      "veg1": null,
+      "fish1": null,
+      "p3": 1,
+      "trip1": 1,
+      "alb1": 1,
+      "bone1": 1,
+      "itch1": null,
+      "early1": 9,
+      "snack2": null,
+      "energy1": 4,
+      "transplant1": null,
+      "kfruit1": 1,
+      "acidosis1": 1
+    },
+    "lexical_a0.05": {
+      "k1": 1,
+      "k2": 5,
+      "p1": 6,
+      "p2": 1,
+      "na1": 1,
+      "na2": 2,
+      "prot1": 3,
+      "prot2": null,
+      "water1": 8,
+      "water2": 4,
+      "eat1": 5,
+      "eat2": 1,
+      "snack1": null,
+      "fruit1": 3,
+      "fruit2": 2,
+      "ckd1": 2,
+      "ckd2": 6,
+      "veg1": null,
+      "fish1": null,
+      "p3": 1,
+      "trip1": 1,
+      "alb1": 1,
+      "bone1": 1,
+      "itch1": null,
+      "early1": 6,
+      "snack2": null,
+      "energy1": 3,
+      "transplant1": null,
+      "kfruit1": 1,
+      "acidosis1": 1
+    },
+    "lexical_a0.15": {
+      "k1": 1,
+      "k2": 4,
+      "p1": 4,
+      "p2": 1,
+      "na1": 1,
+      "na2": 1,
+      "prot1": 2,
+      "prot2": null,
+      "water1": 3,
+      "water2": 4,
+      "eat1": 6,
+      "eat2": 1,
+      "snack1": null,
+      "fruit1": 2,
+      "fruit2": 1,
+      "ckd1": 2,
+      "ckd2": 6,
+      "veg1": null,
+      "fish1": null,
+      "p3": 1,
+      "trip1": 1,
+      "alb1": 1,
+      "bone1": 1,
+      "itch1": null,
+      "early1": 5,
+      "snack2": null,
+      "energy1": 2,
+      "transplant1": null,
+      "kfruit1": 2,
+      "acidosis1": 1
+    },
+    "combo_dedup_lex_cap2": {
+      "k1": 1,
+      "k2": 7,
+      "p1": 6,
+      "p2": 1,
+      "na1": 1,
+      "na2": 2,
+      "prot1": 3,
+      "prot2": null,
+      "water1": 8,
+      "water2": 8,
+      "eat1": 5,
+      "eat2": 1,
+      "snack1": null,
+      "fruit1": 3,
+      "fruit2": 2,
+      "ckd1": 2,
+      "ckd2": 6,
+      "veg1": null,
+      "fish1": null,
+      "p3": 1,
+      "trip1": 1,
+      "alb1": 1,
+      "bone1": 1,
+      "itch1": null,
+      "early1": 6,
+      "snack2": null,
+      "energy1": 5,
+      "transplant1": null,
+      "kfruit1": 1,
+      "acidosis1": 1
+    },
+    "combo_dedup_lex_cap3": {
+      "k1": 1,
+      "k2": 5,
+      "p1": 7,
+      "p2": 1,
+      "na1": 1,
+      "na2": 2,
+      "prot1": 3,
+      "prot2": null,
+      "water1": 6,
+      "water2": 8,
+      "eat1": 5,
+      "eat2": 1,
+      "snack1": null,
+      "fruit1": 3,
+      "fruit2": 2,
+      "ckd1": 2,
+      "ckd2": 6,
+      "veg1": null,
+      "fish1": null,
+      "p3": 1,
+      "trip1": 1,
+      "alb1": 1,
+      "bone1": 1,
+      "itch1": null,
+      "early1": 6,
+      "snack2": null,
+      "energy1": 3,
+      "transplant1": null,
+      "kfruit1": 1,
+      "acidosis1": 1
+    },
+    "combo_dedup_lex_nocap": {
+      "k1": 1,
+      "k2": 5,
+      "p1": 6,
+      "p2": 1,
+      "na1": 1,
+      "na2": 2,
+      "prot1": 3,
+      "prot2": null,
+      "water1": 8,
+      "water2": 4,
+      "eat1": 5,
+      "eat2": 1,
+      "snack1": null,
+      "fruit1": 3,
+      "fruit2": 2,
+      "ckd1": 2,
+      "ckd2": 6,
+      "veg1": null,
+      "fish1": null,
+      "p3": 1,
+      "trip1": 1,
+      "alb1": 1,
+      "bone1": 1,
+      "itch1": null,
+      "early1": 6,
+      "snack2": null,
+      "energy1": 3,
+      "transplant1": null,
+      "kfruit1": 1,
+      "acidosis1": 1
+    }
+  },
+  "dedup_detail": {
+    "k1": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "k2": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "p1": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "p2": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "na1": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "na2": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "prot1": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "prot2": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "water1": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "water2": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "eat1": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "eat2": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "snack1": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "fruit1": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "fruit2": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "ckd1": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "ckd2": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "veg1": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "fish1": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "p3": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "trip1": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "alb1": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "bone1": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "itch1": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "early1": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "snack2": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "energy1": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "transplant1": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "kfruit1": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    },
+    "acidosis1": {
+      "surviving_original_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "n_dropped": 0
+    }
+  }
+}

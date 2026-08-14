@@ -5,7 +5,8 @@ data/FOOK_rag_kb.json(청크+임베딩)에서 질문과 유사한 조각을 찾�
 
 API 키: 환경변수 OPENAI_API_KEY.
 """
-import os, json
+import os, json, re
+from collections import namedtuple
 import numpy as np
 
 _KB = None          # [{'text','source','embedding'}, ...]
@@ -47,25 +48,29 @@ def retrieve(query, top_k=5):
 
 
 # ── 최소 유사도 게이트: "관련 자료 없음"을 판단하는 기준 ─────────────────────────
-# 실측 데이터로 도출(2026-08-13, 실 서비스 KB — data/FOOK_rag_kb.json 539개 청크, 실제
-# text-embedding-3-small 임베딩 그대로 사용. 이 환경엔 OPENAI_API_KEY가 없어 "오늘 날씨 어때"
-# 같은 실제 이탈 질문을 라이브로 임베딩해 확인하지는 못했다 — 대신 실제 KB 임베딩 행렬 자체로
-# 두 가지를 측정했다:
-#   1) KB 내 모든 청크쌍(539×538/2쌍)의 실제 코사인 유사도: 평균 0.425, 하위10%(p10)조차 0.282,
-#      서로 다른 출처 문서끼리(관련성이 가장 낮은 실제 사례)도 평균 0.399 — 즉 이 임베딩 공간은
-#      "같은 도메인·같은 언어"라는 이유만으로도 기저 유사도가 상당히 높게 깔린다(OpenAI 임베딩의
-#      잘 알려진 양의 편향). 진짜 무관한 질문(날씨·축구 등)도 "한국어"라는 공통점 때문에 이
-#      기저선 근처까지는 올라올 가능성이 있다.
-#   2) 수학적으로 완전히 무관한 벡터(1536차원 표준정규분포에서 뽑은 무작위 단위벡터 200개)를 같은
-#      KB 539개 청크와 비교: 평균 유사도 ≈0(-0.0007), 청크당 최댓값의 평균은 0.058, 전체 관측
-#      최댓값은 0.122 — 이게 "의미적으로 전혀 연관 없음"의 실측 하한(노이즈 바닥)이다.
-#   실제 이탈 질문(같은 한국어지만 의미상 무관)은 이 둘 사이 어딘가에 위치할 것으로 추정되며,
-#   0.15는 노이즈 바닥(≤0.122)보다 확실히 위에 있으면서 실제 도메인 내 최소 관련성(p10=0.282)보다는
-#   충분히 아래라 안전 마진이 크다. evaluation/evaluate_rag.py는 OPENAI_API_KEY가 있는 환경에서
-#   실제 이탈 질문 점수를 측정해 이 기본값을 검증/재조정하도록 만들어졌다 — 그 결과가 나오면
-#   이 기본값을 갱신할 것.
+# 이 값은 "검색 관련성(retrieval relevance)" 임계값이지, 임상적/의학적으로 검증된 안전 기준이
+# 아니다 — 어디까지나 아래 v2 평가셋에서 실측한 점수 분포로부터 고른 값이며, "이 값이 확정적으로
+# 최적"이라는 주장도 아니다(더 넓은 질문셋·KB가 쌓이면 재조정 대상).
+#
+# 1차 도출(2026-08-13, RAG_MIN_SCORE=0.15): OPENAI_API_KEY가 없던 환경에서 실제 이탈 질문을
+# 라이브로 임베딩할 수 없어, KB 자체 청크쌍 유사도(평균 0.425, p10=0.282)와 완전 무관한 무작위
+# 벡터 200개의 최댓값 분포(≤0.122, "노이즈 바닥")로부터 그 사이 어딘가일 것이라 추정만 하고
+# 넉넉한 안전 마진을 둔 잠정값이었다.
+#
+# 2차 도출(2026-08-13, RAG_MIN_SCORE=0.30): OPENAI_API_KEY가 있는 환경에서 evaluation/
+# evaluate_rag_v2.py로 실제 이탈 질문(out_of_scope) 21개 + 정답이 있는 질문(rag) 30개를
+# text-embedding-3-small로 라이브 임베딩해 top-5 점수 분포를 직접 측정했다(결과:
+# evaluation/rag_eval_results_v2.json, 청크 단위 근거 검토: evaluation/rag_evidence_inspection_v2.md).
+# 0.30은 이 측정에서 긍정 재현율(정답 문서가 top-5 안에 있는 질문 중 실제로 게이트를 통과하는
+# 비율) 약 29/30(96.7%, fish1만 탈락)과 이탈 질문 정답 거부율 약 16/21(76.2%)을 동시에 준다 —
+# 완벽하지 않고(감기약·당뇨 인슐린·암 치료 같은 "의학적이지만 범위 밖" 질문 일부는 여전히
+# 통과함, 위 v2 평가 문서 참고), 더 높이면(0.40~0.48) 이탈 거부율은 오르지만 긍정 재현율이
+# 눈에 띄게 깎인다(같은 평가에서 확인). 즉 이 값은 "이 특정 평가셋의 측정된 점수 분포에서 고른
+# 절충점"이지 임상적으로 안전하다고 보증된 수치가 아니다 — 오답 사례가 있어도 항상
+# NO_EVIDENCE_ANSWER로 조심스럽게 안내하고 담당 의료진 상담을 권하는 SYSTEM 프롬프트가 최종
+# 안전판이다.
 # 환경변수 RAG_MIN_SCORE로 재정의 가능(운영 중 데이터가 쌓이면 조정할 수 있도록).
-RAG_MIN_SCORE = float(os.environ.get('RAG_MIN_SCORE', '0.15'))
+RAG_MIN_SCORE = float(os.environ.get('RAG_MIN_SCORE', '0.30'))
 
 NO_EVIDENCE_ANSWER = (
     "제공된 자료에서는 확인할 수 없습니다. 이 질문은 저희가 갖고 있는 임상 영양 자료 범위를 "
@@ -74,10 +79,105 @@ NO_EVIDENCE_ANSWER = (
 
 
 def _relevant(hits, min_score=None):
-    """retrieve()가 반환한 원 점수 중 RAG_MIN_SCORE 이상만 남긴다 — "그럴듯한 top_k"가 아니라
-    "실제로 관련 있는" 것만 LLM 프롬프트에 넣기 위한 정책 필터. min_score를 안 주면 RAG_MIN_SCORE."""
+    """retrieve()가 반환한 원(raw) 임베딩 코사인 점수 중 RAG_MIN_SCORE 이상만 남긴다 — "그럴듯한
+    top_k"가 아니라 "실제로 관련 있는" 것만 LLM 프롬프트에 넣기 위한 정책 필터.
+    min_score를 안 주면 RAG_MIN_SCORE.
+    ── 안전 불변식(구조적으로 보장) ──────────────────────────────────────────────────
+    이 함수는 h['score'](retrieve()가 매긴 원 코사인 유사도)만 비교한다 — 절대로 어휘 재정렬
+    (_rerank()/rerank_score)이 적용된 값과 비교하지 않는다. answer()의 파이프라인은
+    retrieve() -> _relevant()(게이트, 여기) -> _rerank()(재정렬) 순서로 호출되므로, 이 함수가
+    호출되는 시점에는 rerank_score라는 게 아예 존재하지 않는다 — "우연히 지금 값이 같아서"가
+    아니라 함수 호출 순서상 구조적으로 게이트가 재정렬 이전 원점수만 볼 수 있다."""
     thresh = RAG_MIN_SCORE if min_score is None else min_score
     return [h for h in hits if h['score'] >= thresh]
+
+
+# ── 경량 재정렬(reranking): 어휘 중복 보너스 ──────────────────────────────────────
+# backend/evaluation/reranking_experiment.py에서 검증된 실험 결과를 그대로 반영한다:
+# alpha=0.05는 Evidence Recall@3을 43.3%->53.3%로 끌어올리면서 out-of-scope 게이트 오통과
+# 사례가 0건이었다. alpha=0.15는 더 큰 개선을 보였지만 "다음 주 로또 번호 추천해줘"
+# 등 out-of-scope 질문 2건이 게이트를 잘못 통과시키는 것이 확인되어 채택하지 않는다
+# (reranking_experiment_results.json의 oos_safety_check 참고). dedup/source-diversity cap은
+# 실효가 없거나(중복 없음) 순역행(net-negative)이라 함께 채택하지 않는다.
+#
+# 중요: 이 재정렬은 반드시 _relevant() 게이트를 이미 통과한 후보에 대해서만, 그 이후 단계에서만
+# 적용한다 — 게이트 판정 자체에는 이 보너스가 절대 섞이지 않는다(위 _relevant() 독스트링의
+# 안전 불변식 참고).
+RAG_LEXICAL_ALPHA = float(os.environ.get('RAG_LEXICAL_ALPHA', '0.05'))
+
+RAG_CANDIDATE_POOL = 10   # answer()가 retrieve()에서 뽑아오는 원 후보 풀 크기(재정렬 여유를 위해 5->10)
+RAG_CONTEXT_MAX = 5       # 게이트 통과 + 재정렬 이후, 실제 LLM 프롬프트에 넣는 최종 청크 수 상한
+
+# 한국어 조사/어미 때문에 형태소 분석 없이는 토큰화가 불안정하므로, 질문을 공백 기준으로 쪼갠 뒤
+# 흔한 조사/어미 접미사를 벗겨내는 방식으로 "내용어"만 추출한다(형태소 분석기 등 새 의존성 없음).
+# backend/evaluation/reranking_fetch_pool.py / reranking_experiment.py 실험에서 쓴 것과 완전히
+# 동일한 정규화 규칙·접미사 목록·부분문자열 매칭 로직을 그대로 재사용한다(재발명하지 않음).
+_LEX_DASH_RE = re.compile(r'[‐‑‒–—−~－]')
+_LEX_WS_RE = re.compile(r'\s+')
+_LEX_PUNCT_RE = re.compile(r'[.,!?()\[\]{}·:;"\'“”‘’…/\\|~\-‐-―]')
+
+_LEX_STOP_SUFFIXES = sorted([
+    '은', '는', '이', '가', '을', '를', '의', '에', '에서', '으로', '로', '와', '과', '도', '만',
+    '나요', '까요', '습니까', '합니까', '되나요', '인가요', '하나요', '해요', '이나', '한가요',
+    '해야', '해도', '해서', '해서요', '드셔도', '드릴까요',
+], key=len, reverse=True)
+
+
+def _lex_norm_light(s):
+    """공백 정리 + 구두점 제거 + 소문자화 — 어휘 중복(부분문자열 매칭) 비교용."""
+    s = _LEX_PUNCT_RE.sub(' ', s)
+    s = _LEX_WS_RE.sub(' ', s).strip().lower()
+    return s
+
+
+def _question_content_tokens(question):
+    """질문에서 조사/어미를 벗겨낸 2자 이상 내용어 토큰 목록(등장 순서 유지, 중복 제거)."""
+    q = _LEX_PUNCT_RE.sub(' ', question).strip()
+    words = _LEX_WS_RE.split(q)
+    toks = []
+    for w in words:
+        w2 = w
+        for suf in _LEX_STOP_SUFFIXES:
+            if w2.endswith(suf) and len(w2) - len(suf) >= 2:
+                w2 = w2[: -len(suf)]
+                break
+        if len(w2) >= 2:
+            toks.append(w2)
+    seen = set(); out = []
+    for t in toks:
+        if t not in seen:
+            seen.add(t); out.append(t)
+    return out
+
+
+def _lexical_bonus(question, chunk_text):
+    """질문의 내용어 토큰 중 청크 텍스트에 (부분문자열로) 등장하는 비율(0.0~1.0).
+    독립적으로 테스트 가능하도록 게이트 로직(_relevant())과 완전히 분리된 별도 함수 —
+    이 함수의 반환값은 오직 _rerank()에서 게이트 통과 후 정렬 순서를 바꾸는 데만 쓰인다."""
+    tokens = _question_content_tokens(question)
+    if not tokens:
+        return 0.0
+    nt = _lex_norm_light(chunk_text)
+    hits = sum(1 for t in tokens if t in nt)
+    return hits / len(tokens)
+
+
+def _rerank(question, hits):
+    """게이트(_relevant())를 이미 통과한 hits만 입력으로 받는다 — 게이트 판정에는 관여하지 않고,
+    그 이후 "어느 순서로 LLM 프롬프트에 넣을까"만 바꾼다.
+    각 후보에 rerank_score = score(원 코사인 유사도, 불변) + RAG_LEXICAL_ALPHA * 어휘보너스를
+    추가해 그 값으로 재정렬한다. 원본 'score' 키는 절대 덮어쓰지 않는다 — retrieve()가 매긴
+    원 코사인 유사도라는 의미를 그대로 유지해야 evaluation/ 스크립트들이 직접 retrieve()를
+    불러 쓸 때(원점수 기대)와 로그·디버그 경로에서 'score'를 봐도 재정렬값과 혼동되지 않는다."""
+    scored = []
+    for h in hits:
+        bonus = _lexical_bonus(question, h['text'])
+        rerank_score = h['score'] + RAG_LEXICAL_ALPHA * bonus
+        scored.append({**h, 'rerank_score': rerank_score})
+    # Python list.sort()는 안정 정렬이므로 rerank_score가 같은 경우 원래(원점수 기준) 순서가
+    # 그대로 유지된다 — 별도 tiebreaker 코드 없이도 실험 스크립트와 동일한 동점 처리가 된다.
+    scored.sort(key=lambda h: -h['rerank_score'])
+    return scored
 
 
 SYSTEM = (
@@ -334,6 +434,12 @@ def food_lookup_answer(question, food_name, weight=None, consumed=None, meals_le
     # RAG_MIN_SCORE 미만인 후보는 애초에 프롬프트에 넣지 않는다 — 여긴 보조 정보라 "관련자료 없음"으로
     # 답변을 거부하지는 않지만(주 답변은 영양DB 수치), 무관한 조각이 섞여 들어가 LLM이 엉뚱한 주의사항을
     # 덧붙이는 걸 막는다.
+    # (2026-08-14 결정) answer()의 주 RAG 경로와 달리 여기는 RAG_CANDIDATE_POOL 확대 + _rerank()
+    # 재정렬을 적용하지 않는다 — 근거: 1) 여긴 "답변 가능 여부"를 좌우하는 게이트가 아니라 이미
+    # 확정된 영양DB 수치 답변에 곁들이는 보조 정보일 뿐이라 재정렬로 얻을 안전상 이득이 없고,
+    # 2) top_k=3의 작은 풀에서는 재정렬이 뒤집을 여지가 거의 없으며, 3) 이 보조 경로까지 넓히면
+    # (게이트가 없는 곳에) 검증되지 않은 새로운 표면적을 만드는 셈이라 이번 작업의 범위(RAG_MIN_SCORE
+    # 불변, alpha=0.05만 채택) 밖이다. 그대로 top_k=top_k(기본 3)의 단순 조회를 유지한다.
     hits = _relevant(retrieve(question, top_k=top_k))
     rag_block = "\n\n".join(f"[{h['source']}]\n{h['text']}" for h in hits)
     rag_sources = sorted({h['source'] for h in hits})
@@ -373,10 +479,154 @@ def food_lookup_answer(question, food_name, weight=None, consumed=None, meals_le
     return text, rag_sources
 
 
+# ── Scope gate: "이 질문이 KOOK(혈액투석 영양) 도메인 안인가" 사전 필터 ──────────────
+# 근거: backend/evaluation/scope_gate_experiment.py에서 결정론적 규칙 기반 "Method A"를
+# Method B(임베딩 scope-prototype 유사도) / Method C(A+B 하이브리드)와 비교 평가했고,
+# scope_gate_experiment_results.json에서 Method A가 positive 30/30, food_db는 별도 경로라
+# 텍스트만으로는 0/5(→ find_food()가 먼저 가로채므로 무관, 아래 참고), general-OOS 18/18,
+# hard-medical-OOS(기존 3 + 신규 5) 8/8을 만족함을 확인했다. 실제 production 파이프라인
+# 순서(find_food → scope gate → retrieve → _relevant → _rerank)를 그대로 재현한
+# scope_gate_pipeline_sim_results.json에서도 동일 결과(no-answer accuracy 18/33 → 33/33,
+# positive pass-through 29/30 불변 — fish1은 scope와 무관하게 RAG_MIN_SCORE 게이트에서
+# 원래도 탈락, retrieval-unchanged 확인 완료)로 재확인됐다. Method B는 in-scope recall이
+# 20~33%로 붕괴해 기각, Method C는 핵심 지표는 동률이지만 mixed-intent 2건에서 새로운
+# 과잉차단이 생겨 Method A(더 단순하고 동등 효과)가 채택됐다 — scope_gate_definitions.md
+# §4~6 참고. 아래 DOMAIN_TERMS/DIALYSIS_PROCEDURE_TERMS/RED_FLAG_TERMS와 판정 로직은
+# scope_gate_experiment.py의 것을 그대로 복제한다(eval 문항 텍스트에 맞춰 사후 조정된 규칙이
+# 아님 — 그 스크립트의 출처 주석 참고). 평가와 production 로직이 갈라지지 않도록 나중에
+# 어느 한쪽만 고치는 일이 없어야 한다.
+#
+# 구조적으로 중요한 두 가지:
+#   1) 이 게이트는 answer()에서 find_food()가 실패했을 때만 호출된다 — food_db 라우팅
+#      질문("바나나 먹어도 되나요?" 등)은 scope gate 이전에 find_food()가 이미 가로채므로
+#      절대 이 필터를 거치지 않는다(텍스트만 보면 도메인 키워드가 거의 없어 이 필터를 통과
+#      못 하는 경우가 많음 — 그래서 순서가 안전을 좌우한다).
+#   2) RAG_MIN_SCORE 임베딩 게이트(_relevant())와 이 scope gate는 완전히 독립된 별도
+#      질문("이 질문이 KOOK 도메인 안인가" vs "KB에서 충분히 관련된 근거를 찾았는가")이다 —
+#      순수 문자열 매칭만 하며 임베딩 점수/어휘 재정렬 보너스를 전혀 읽거나 쓰지 않는다.
+IN_SCOPE = 'IN_SCOPE'
+OUT_OF_SCOPE = 'OUT_OF_SCOPE'
+
+# scope_gate_experiment.py DOMAIN_TERMS와 동일 — 출처: (1) SYSTEM 프롬프트가 선언한 영양
+# 관리 축(칼륨/인/나트륨/단백질/수분), (2) FOOK_adjust_levers.py의 5대 영양소 프레임워크,
+# (3) 기존 v2 positive 30문항이 다뤄온 인접 임상지표(알부민/부종/가려움/뼈/산증), (4) KB
+# 목차 자체의 챕터 주제어(과일/채소/생선/물). eval 문항 텍스트를 보고 사후에 끼워맞춘 목록이
+# 아니다 — scope_gate_definitions.md가 이 스크립트보다 먼저 작성됐다.
+DOMAIN_TERMS = [
+    '혈액투석', '복막투석', '투석', '신장', '콩팥', '만성콩팥병', '신부전',
+    '사구체여과율', '사구체',
+    '칼륨', '저칼륨', '고칼륨', '나트륨', '저나트륨', '고나트륨', '염분', '저염식', '저염',
+    '단백질', '저단백', '고단백',
+    '수분섭취', '수분', '체중증가', '체중', '알부민', '부종',
+    '인결합제', '인 수치', '인 섭취', '숨은 인', '저인', '고인',
+    '투석액', '식이요법', '식사요법', '영양', '영양소', '간식', '식단', '조리법', '칼로리', '열량',
+    '요독', '가려움', '가려운', '골밀도', '골다공증', '뼈가', '빈혈', '부갑상선', '산증',
+    '식품구성', '반찬', '끼니', '식사',
+    # KB 목차에 실제로 존재하는 챕터 주제어(scope_gate_definitions.md §2 — "과일이 먹고
+    # 싶을 때", "채소가 먹고 싶을 때", "물은 얼마나 마셔도 되나요?"). '물'은 1글자라
+    # 부분문자열 충돌 위험(예: '동물', '선물')이 있음을 알고 포함한다(scope_gate_experiment.py
+    # sanity 단계에서 eval set 전체에 충돌 사례가 없음을 직접 확인).
+    '물', '과일', '채소', '생선',
+]
+
+# scope_gate_experiment.py DIALYSIS_PROCEDURE_TERMS와 동일 — "투석"만으로는 domain=True가
+# 되지만, 영양과 무관한 시술/장비/행정 신호가 함께 있으면 KB에 관련 청크가 있어도(도관/
+# 혈관통로/투석 기계/비용 챕터가 실제로 존재) SYSTEM 프롬프트가 선언한 영양 정보 범위
+# 밖이라고 우선 판정한다(scope_gate_definitions.md §4-③).
+DIALYSIS_PROCEDURE_TERMS = [
+    '도관', '카테터', '동정맥루', '혈관통로', '접근로', '투석기계', '투석 기계',
+    '건강보험', '보험 적용', '치료 비용', '수가',
+    '주 몇 번', '몇 시간씩', '스케줄',
+]
+
+# scope_gate_experiment.py RED_FLAG_TERMS와 동일 — SYSTEM 프롬프트가 명시적으로 "개인별
+# 판단 필요 → 의료진 상담"으로 분리한 약물/시술 영역의 일반 명사(브랜드명은 '타이레놀' 1개만
+# 예시로 포함, 나머지는 전부 일반 명사).
+RED_FLAG_TERMS = [
+    '인슐린', '항암', '화학요법', '감기약', '타이레놀', '처방전', '처방약', '진통제', '수면제',
+    '항생제', '백신', '접종', '연고', '안약', '파스', '마취', '수술', '시술', '방사선치료',
+    '해열제', '소화제', '변비약', '알레르기약', '비염약', '피임약', '갑상선약', '갑상선',
+    '천식약', '혈압약', '당뇨약', '항히스타민', '스테로이드', '항응고제', '와파린',
+    '입덧', '정형외과', '피부과', '산부인과',
+]
+
+# scope_gate_experiment.py의 _norm()/rule_signals()와 동일 정규화 규칙(구두점을 공백으로
+# 치환 후 공백 정리) — 별도 이름(_SCOPE_*)을 쓰는 이유는 위쪽 어휘 재정렬용 _LEX_PUNCT_RE/
+# _LEX_WS_RE와 문자 클래스가 다른 별개 용도이기 때문(서로 재사용하면 두 필터가 실수로
+# 얽힐 수 있어 의도적으로 분리).
+_SCOPE_PUNCT_RE = re.compile(r'[.,!?()\[\]{}·:;"\'“”‘’…/\\|~\-‐-―]')
+_SCOPE_WS_RE = re.compile(r'\s+')
+
+
+def _scope_norm(s):
+    s = _SCOPE_PUNCT_RE.sub(' ', s)
+    return _SCOPE_WS_RE.sub(' ', s).strip()
+
+
+ScopeResult = namedtuple('ScopeResult', ['verdict', 'reason'])
+
+
+def classify_scope(question):
+    """이 질문이 KOOK(혈액투석 영양) 도메인 IN_SCOPE인지 OUT_OF_SCOPE인지 판정한다.
+    scope_gate_experiment.py의 rule_verdict()/rule_gate_binary()(Method A, mixed_default=True/
+    no_signal_default=False로 검증된 그대로)를 production용으로 그대로 옮긴 것 — 새 규칙을
+    추가하지 않았다. 4-way 내부 신호(has_domain/has_procedure/has_redflag)를 아래처럼
+    이진 IN_SCOPE/OUT_OF_SCOPE로 접는다:
+      - has_procedure (투석 시술/장비/보험 신호) -> OUT_OF_SCOPE
+        ('dialysis_procedure_not_nutrition') — domain 신호가 같이 있어도 우선 적용.
+      - has_redflag and not has_domain -> OUT_OF_SCOPE ('other_medical_treatment')
+        (감기약/인슐린/항암 등 약물·타 치료 영역, domain 신호 전혀 없음).
+      - has_domain and not has_redflag -> IN_SCOPE ('dialysis_nutrition').
+      - has_domain and has_redflag (MIXED) -> IN_SCOPE ('mixed_intent_default_pass')
+        (recall 최우선 가중치에 따른 기본값 — "투석 중인데 감기약 먹어도 돼?" 같은 위험
+        사례는 알려진 한계로 남겨두고 이번 작업에서 새 규칙으로 "고치지" 않는다, 작업 지시
+        참고 — Method C가 이를 다루는 대안으로 검토됐으나 기각됨).
+      - 신호 없음(NO_SIGNAL) -> OUT_OF_SCOPE ('unrelated') — 일반 잡담 기본 거부."""
+    q = _scope_norm(question)
+    has_domain = any(t in q for t in DOMAIN_TERMS)
+    has_procedure = any(t in q for t in DIALYSIS_PROCEDURE_TERMS)
+    has_redflag = any(t in q for t in RED_FLAG_TERMS)
+
+    if has_procedure:
+        return ScopeResult(OUT_OF_SCOPE, 'dialysis_procedure_not_nutrition')
+    if has_redflag and not has_domain:
+        return ScopeResult(OUT_OF_SCOPE, 'other_medical_treatment')
+    if has_domain and not has_redflag:
+        return ScopeResult(IN_SCOPE, 'dialysis_nutrition')
+    if has_domain and has_redflag:
+        return ScopeResult(IN_SCOPE, 'mixed_intent_default_pass')
+    return ScopeResult(OUT_OF_SCOPE, 'unrelated')
+
+
+# NO_EVIDENCE_ANSWER("KB에서 근거를 못 찾음")와 같은 톤을 쓰되 별도 상수로 분리한다 — 이유가
+# 다르면("이 질문 자체가 우리 도메인 밖" vs "도메인 안인데 근거 부족") 디버깅/로그에서 구분이
+# 되어야 한다.
+OUT_OF_SCOPE_ANSWER = (
+    "이 질문은 저희가 제공하는 혈액투석 환자 영양 정보 범위를 벗어난 것 같아요 — "
+    "담당 의료진이나 영양사와 상담해 주세요."
+)
+
+
 def answer(question, weight=None, consumed=None, meals_left=None, top_k=5, model='gpt-4o-mini'):
     """질문 -> (답변, 참고한 출처 리스트). 특정 재료 질문이면 영양DB 직접 조회, 아니면 RAG.
     weight+consumed를 주면(오늘 이미 먹은 양을 알면) 남은 예산까지 감안해서 답하고,
-    meals_left(오늘 남은 끼니 수)까지 있으면 하루 전체가 아니라 '다음 한 끼 몫'으로 비교한다."""
+    meals_left(오늘 남은 끼니 수)까지 있으면 하루 전체가 아니라 '다음 한 끼 몫'으로 비교한다.
+
+    RAG 검색 파이프라인(2026-08-14, 경량 재정렬 도입) — 순서가 중요하다:
+      1) retrieve(question, top_k=RAG_CANDIDATE_POOL)로 원 임베딩 후보 풀(10개)을 가져온다.
+      2) _relevant()로 게이트 필터링 — 오직 원 코사인 점수(h['score'])만 RAG_MIN_SCORE와 비교한다.
+         이 단계에서 탈락한 후보는 3)의 재정렬 대상에 아예 들어가지 않는다.
+      3) 게이트를 통과한 후보에 한해서만 _rerank()로 어휘 중복 보너스를 얹어 재정렬한다
+         (RAG_LEXICAL_ALPHA=0.05, backend/evaluation/reranking_experiment.py 실험에서 안전성 확인됨).
+      4) 재정렬된 순서에서 최대 RAG_CONTEXT_MAX(5)개만 최종 컨텍스트로 쓴다.
+    top_k 매개변수는 하위 호환을 위해 남겨뒀지만 더 이상 후보 풀 크기를 결정하지 않는다(그
+    역할은 RAG_CANDIDATE_POOL/RAG_CONTEXT_MAX 상수가 맡는다) — 이 함수를 top_k로 호출하는
+    기존 코드/테스트가 없음을 확인했다.
+
+    Scope gate(2026-08-14) — find_food()가 실패한 경우에만 적용: classify_scope()로 이
+    질문이 KOOK 도메인(혈액투석 영양) 안인지 먼저 판정하고, OUT_OF_SCOPE면 retrieve()
+    (임베딩 API 호출)도 LLM 호출도 하지 않고 바로 고정 안내문을 반환한다 — food_db 라우팅은
+    이 게이트보다 앞선 find_food() 체크가 이미 가로채므로 절대 영향받지 않는다."""
     food = find_food(question)
     if food:
         result = food_lookup_answer(question, food, weight=weight, consumed=consumed,
@@ -384,13 +634,18 @@ def answer(question, weight=None, consumed=None, meals_left=None, top_k=5, model
         if result:
             text, rag_sources = result
             return text, sorted({'식약청 국가표준식품성분표 (FOOK 영양DB)', *rag_sources})
-    hits = retrieve(question, top_k=top_k)
-    relevant = _relevant(hits)
+    scope = classify_scope(question)
+    if scope.verdict == OUT_OF_SCOPE:
+        return OUT_OF_SCOPE_ANSWER, []
+    hits = retrieve(question, top_k=RAG_CANDIDATE_POOL)
+    relevant = _relevant(hits)   # 게이트: 원 코사인 점수만 사용, 어휘 보너스는 아직 계산조차 안 됨
     if not relevant:
         # 후보 전부가 RAG_MIN_SCORE 미만 — 근거 없이 LLM이 지어내게 두지 않고 여기서 바로 거절한다.
         # (여긴 주 답변 경로라 food_lookup_answer()의 보조 RAG와 달리 "관련자료 없음"이 곧 "답변 불가".)
         return NO_EVIDENCE_ANSWER, []
-    context = "\n\n".join(f"[{h['source']}]\n{h['text']}" for h in relevant)
+    reranked = _rerank(question, relevant)   # 게이트 통과분만 재정렬 — 게이트 결과 자체는 안 바뀜
+    context_hits = reranked[:RAG_CONTEXT_MAX]
+    context = "\n\n".join(f"[{h['source']}]\n{h['text']}" for h in context_hits)
     prompt = f"[참고 자료]\n{context}\n\n[환자 질문]\n{question}"
     client = _client()
     resp = client.chat.completions.create(
@@ -400,5 +655,5 @@ def answer(question, weight=None, consumed=None, meals_left=None, top_k=5, model
         temperature=0.2,
     )
     text = resp.choices[0].message.content.strip()
-    sources = sorted({h['source'] for h in relevant})
+    sources = sorted({h['source'] for h in context_hits})
     return text, sources

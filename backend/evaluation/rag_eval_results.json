@@ -1,0 +1,722 @@
+{
+  "summary": {
+    "n_questions": 29,
+    "n_rag": 19,
+    "n_out_of_scope": 5,
+    "n_food_db": 5,
+    "top1_hit_rate": 0.368,
+    "top3_hit_rate": 0.737,
+    "top5_hit_rate": 0.789,
+    "no_answer_accuracy": 0.0,
+    "routing_accuracy": 1.0,
+    "RAG_MIN_SCORE": 0.15
+  },
+  "results": [
+    {
+      "id": "k1",
+      "category": "칼륨 관리",
+      "type": "rag",
+      "question": "혈액투석 환자가 피해야 할 고칼륨 채소는 어떤 게 있나요?",
+      "expected_source": [
+        "혈액투석_영양식생활관리_2권"
+      ],
+      "top_sources": [
+        "혈액투석_영양식생활관리_2권",
+        "콩팥병_환자를_위한_안내서",
+        "혈액투석_영양식생활관리_2권",
+        "혈액투석_영양식생활관리_2권",
+        "콩팥병_환자를_위한_안내서"
+      ],
+      "top_scores": [
+        0.5499,
+        0.5341,
+        0.53,
+        0.5283,
+        0.5214
+      ],
+      "hit@1": true,
+      "hit@3": true,
+      "hit@5": true,
+      "n_relevant_after_gate": 5,
+      "elapsed_s": 4.19,
+      "routing_correct": true
+    },
+    {
+      "id": "k2",
+      "category": "칼륨 관리",
+      "type": "rag",
+      "question": "칼륨 수치가 너무 높아지면 몸에 어떤 문제가 생기나요?",
+      "expected_source": [
+        "혈액투석_영양식생활관리_2권"
+      ],
+      "top_sources": [
+        "콩팥병_환자를_위한_안내서",
+        "혈액투석_영양식생활관리_2권",
+        "콩팥병_환자를_위한_안내서",
+        "혈액투석_영양식생활관리_2권",
+        "콩팥병_환자를_위한_안내서"
+      ],
+      "top_scores": [
+        0.4227,
+        0.418,
+        0.4121,
+        0.4041,
+        0.3982
+      ],
+      "hit@1": false,
+      "hit@3": true,
+      "hit@5": true,
+      "n_relevant_after_gate": 5,
+      "elapsed_s": 0.844,
+      "routing_correct": true
+    },
+    {
+      "id": "p1",
+      "category": "인 관리",
+      "type": "rag",
+      "question": "혈액투석 환자는 하루에 인을 얼마나 섭취해야 하나요?",
+      "expected_source": [
+        "혈액투석_영양식생활관리_2권"
+      ],
+      "top_sources": [
+        "혈액투석_영양식생활관리_2권",
+        "콩팥병_환자를_위한_안내서",
+        "혈액투석_영양식생활관리_2권",
+        "콩팥병_환자를_위한_안내서",
+        "혈액투석_영양식생활관리_2권"
+      ],
+      "top_scores": [
+        0.6078,
+        0.5937,
+        0.5873,
+        0.5854,
+        0.5847
+      ],
+      "hit@1": true,
+      "hit@3": true,
+      "hit@5": true,
+      "n_relevant_after_gate": 5,
+      "elapsed_s": 0.425,
+      "routing_correct": true
+    },
+    {
+      "id": "p2",
+      "category": "인 관리",
+      "type": "rag",
+      "question": "가공식품에 들어있는 '숨은 인'이 왜 문제가 되나요?",
+      "expected_source": [
+        "혈액투석_영양식생활관리_2권"
+      ],
+      "top_sources": [
+        "혈액투석_영양식생활관리_2권",
+        "혈액투석_영양식생활관리_2권",
+        "콩팥병_환자를_위한_안내서",
+        "혈액투석_영양식생활관리_2권",
+        "콩팥병_환자를_위한_안내서"
+      ],
+      "top_scores": [
+        0.4064,
+        0.3935,
+        0.3668,
+        0.3635,
+        0.3456
+      ],
+      "hit@1": true,
+      "hit@3": true,
+      "hit@5": true,
+      "n_relevant_after_gate": 5,
+      "elapsed_s": 0.423,
+      "routing_correct": true
+    },
+    {
+      "id": "na1",
+      "category": "나트륨/염분 관리",
+      "type": "rag",
+      "question": "나트륨(염분) 섭취를 줄이려면 요리할 때 어떻게 해야 하나요?",
+      "expected_source": [
+        "만성콩팥병_환자_식사요법"
+      ],
+      "top_sources": [
+        "혈액투석_영양식생활관리_2권",
+        "혈액투석_영양식생활관리_2권",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서"
+      ],
+      "top_scores": [
+        0.6031,
+        0.5571,
+        0.5571,
+        0.5082,
+        0.5044
+      ],
+      "hit@1": false,
+      "hit@3": false,
+      "hit@5": false,
+      "n_relevant_after_gate": 5,
+      "elapsed_s": 0.343,
+      "routing_correct": true
+    },
+    {
+      "id": "na2",
+      "category": "나트륨/염분 관리",
+      "type": "rag",
+      "question": "하루 나트륨(염분) 섭취 권장량은 얼마인가요?",
+      "expected_source": [
+        "만성콩팥병_환자_식사요법"
+      ],
+      "top_sources": [
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "혈액투석_영양식생활관리_2권",
+        "콩팥병_환자를_위한_안내서"
+      ],
+      "top_scores": [
+        0.5107,
+        0.4993,
+        0.4925,
+        0.4847,
+        0.4824
+      ],
+      "hit@1": false,
+      "hit@3": false,
+      "hit@5": false,
+      "n_relevant_after_gate": 5,
+      "elapsed_s": 0.366,
+      "routing_correct": true
+    },
+    {
+      "id": "prot1",
+      "category": "단백질 섭취",
+      "type": "rag",
+      "question": "투석을 시작하기 전 만성콩팥병 환자는 왜 단백질을 제한해야 하나요?",
+      "expected_source": [
+        "콩팥병_환자를_위한_안내서"
+      ],
+      "top_sources": [
+        "혈액투석_영양식생활관리_2권",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "혈액투석_영양식생활관리_2권",
+        "콩팥병_환자를_위한_안내서"
+      ],
+      "top_scores": [
+        0.57,
+        0.5648,
+        0.5479,
+        0.5355,
+        0.5331
+      ],
+      "hit@1": false,
+      "hit@3": true,
+      "hit@5": true,
+      "n_relevant_after_gate": 5,
+      "elapsed_s": 0.925,
+      "routing_correct": true
+    },
+    {
+      "id": "prot2",
+      "category": "단백질 섭취",
+      "type": "rag",
+      "question": "투석을 받고 있는 환자는 단백질을 얼마나 섭취해야 하나요?",
+      "expected_source": [
+        "콩팥병_환자를_위한_안내서"
+      ],
+      "top_sources": [
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서"
+      ],
+      "top_scores": [
+        0.6088,
+        0.5659,
+        0.5648,
+        0.5463,
+        0.5447
+      ],
+      "hit@1": true,
+      "hit@3": true,
+      "hit@5": true,
+      "n_relevant_after_gate": 5,
+      "elapsed_s": 0.35,
+      "routing_correct": true
+    },
+    {
+      "id": "water1",
+      "category": "수분 관리",
+      "type": "rag",
+      "question": "투석과 투석 사이에 체중이 얼마나 늘어나는 게 안전한가요?",
+      "expected_source": [
+        "혈액투석_영양식생활관리_2권"
+      ],
+      "top_sources": [
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "혈액투석_영양식생활관리_2권",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서"
+      ],
+      "top_scores": [
+        0.4992,
+        0.4954,
+        0.4942,
+        0.4869,
+        0.478
+      ],
+      "hit@1": false,
+      "hit@3": true,
+      "hit@5": true,
+      "n_relevant_after_gate": 5,
+      "elapsed_s": 0.321,
+      "routing_correct": true
+    },
+    {
+      "id": "water2",
+      "category": "수분 관리",
+      "type": "rag",
+      "question": "하루에 마셔도 되는 물의 양은 어떻게 정하나요?",
+      "expected_source": [
+        "혈액투석_영양식생활관리_2권"
+      ],
+      "top_sources": [
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서"
+      ],
+      "top_scores": [
+        0.4158,
+        0.4139,
+        0.3887,
+        0.3812,
+        0.3686
+      ],
+      "hit@1": false,
+      "hit@3": false,
+      "hit@5": false,
+      "n_relevant_after_gate": 5,
+      "elapsed_s": 0.172,
+      "routing_correct": true
+    },
+    {
+      "id": "eat1",
+      "category": "외식/조리법",
+      "type": "rag",
+      "question": "외식할 때 나트륨 섭취를 줄이려면 어떻게 해야 하나요?",
+      "expected_source": [
+        "혈액투석_영양식생활관리_2권"
+      ],
+      "top_sources": [
+        "콩팥병_환자를_위한_안내서",
+        "혈액투석_영양식생활관리_2권",
+        "콩팥병_환자를_위한_안내서",
+        "만성콩팥병_환자_식사요법",
+        "혈액투석_영양식생활관리_2권"
+      ],
+      "top_scores": [
+        0.5101,
+        0.5005,
+        0.4763,
+        0.4742,
+        0.4607
+      ],
+      "hit@1": false,
+      "hit@3": true,
+      "hit@5": true,
+      "n_relevant_after_gate": 5,
+      "elapsed_s": 0.436,
+      "routing_correct": true
+    },
+    {
+      "id": "eat2",
+      "category": "외식/조리법",
+      "type": "rag",
+      "question": "채소를 조리해서 칼륨을 줄이는 방법이 있나요?",
+      "expected_source": [
+        "혈액투석_영양식생활관리_2권"
+      ],
+      "top_sources": [
+        "혈액투석_영양식생활관리_2권",
+        "콩팥병_환자를_위한_안내서",
+        "혈액투석_영양식생활관리_2권",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서"
+      ],
+      "top_scores": [
+        0.5069,
+        0.4697,
+        0.4651,
+        0.4644,
+        0.4469
+      ],
+      "hit@1": true,
+      "hit@3": true,
+      "hit@5": true,
+      "n_relevant_after_gate": 5,
+      "elapsed_s": 0.325,
+      "routing_correct": true
+    },
+    {
+      "id": "snack1",
+      "category": "외식/조리법",
+      "type": "rag",
+      "question": "혈액투석 환자가 먹을 수 있는 간식 레시피를 알려주세요.",
+      "expected_source": [
+        "혈액투석환자를_위한_간식"
+      ],
+      "top_sources": [
+        "혈액투석_영양식생활관리_2권",
+        "혈액투석_영양식생활관리_2권",
+        "혈액투석환자를_위한_간식",
+        "혈액투석_영양식생활관리_2권",
+        "혈액투석환자를_위한_간식"
+      ],
+      "top_scores": [
+        0.6068,
+        0.5791,
+        0.5716,
+        0.5715,
+        0.5691
+      ],
+      "hit@1": false,
+      "hit@3": true,
+      "hit@5": true,
+      "n_relevant_after_gate": 5,
+      "elapsed_s": 0.312,
+      "routing_correct": true
+    },
+    {
+      "id": "fruit1",
+      "category": "과일·채소 주의사항",
+      "type": "rag",
+      "question": "말린 과일은 생과일보다 칼륨이 더 많나요?",
+      "expected_source": [
+        "혈액투석_영양식생활관리_2권"
+      ],
+      "top_sources": [
+        "콩팥병_환자를_위한_안내서",
+        "만성콩팥병_환자_식사요법",
+        "콩팥병_환자를_위한_안내서",
+        "혈액투석_영양식생활관리_2권",
+        "콩팥병_환자를_위한_안내서"
+      ],
+      "top_scores": [
+        0.4289,
+        0.4153,
+        0.4092,
+        0.3982,
+        0.3854
+      ],
+      "hit@1": false,
+      "hit@3": false,
+      "hit@5": true,
+      "n_relevant_after_gate": 5,
+      "elapsed_s": 0.358,
+      "routing_correct": true
+    },
+    {
+      "id": "fruit2",
+      "category": "과일·채소 주의사항",
+      "type": "rag",
+      "question": "통조림 과일은 먹어도 괜찮은가요?",
+      "expected_source": [
+        "혈액투석_영양식생활관리_2권"
+      ],
+      "top_sources": [
+        "혈액투석_영양식생활관리_2권",
+        "혈액투석_영양식생활관리_2권",
+        "혈액투석_영양식생활관리_2권",
+        "혈액투석_영양식생활관리_2권",
+        "혈액투석_영양식생활관리_2권"
+      ],
+      "top_scores": [
+        0.378,
+        0.3654,
+        0.3622,
+        0.3568,
+        0.3568
+      ],
+      "hit@1": true,
+      "hit@3": true,
+      "hit@5": true,
+      "n_relevant_after_gate": 5,
+      "elapsed_s": 0.337,
+      "routing_correct": true
+    },
+    {
+      "id": "ckd1",
+      "category": "일반 (콩팥병 개요)",
+      "type": "rag",
+      "question": "만성콩팥병은 단계가 어떻게 나뉘나요?",
+      "expected_source": [
+        "만성콩팥병_환자_식사요법"
+      ],
+      "top_sources": [
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서"
+      ],
+      "top_scores": [
+        0.5206,
+        0.5145,
+        0.5056,
+        0.4903,
+        0.4884
+      ],
+      "hit@1": false,
+      "hit@3": false,
+      "hit@5": false,
+      "n_relevant_after_gate": 5,
+      "elapsed_s": 0.296,
+      "routing_correct": true
+    },
+    {
+      "id": "ckd2",
+      "category": "일반 (콩팥병 개요)",
+      "type": "rag",
+      "question": "콩팥이 우리 몸에서 하는 일이 무엇인가요?",
+      "expected_source": [
+        "콩팥병_환자를_위한_안내서"
+      ],
+      "top_sources": [
+        "콩팥병_환자를_위한_안내서",
+        "혈액투석_영양식생활관리_2권",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서"
+      ],
+      "top_scores": [
+        0.5952,
+        0.5653,
+        0.5553,
+        0.5446,
+        0.5373
+      ],
+      "hit@1": true,
+      "hit@3": true,
+      "hit@5": true,
+      "n_relevant_after_gate": 5,
+      "elapsed_s": 0.318,
+      "routing_correct": true
+    },
+    {
+      "id": "veg1",
+      "category": "과일·채소 주의사항",
+      "type": "rag",
+      "question": "채소는 얼마나 먹어도 되나요?",
+      "expected_source": [
+        "혈액투석_영양식생활관리_2권"
+      ],
+      "top_sources": [
+        "혈액투석환자를_위한_간식",
+        "혈액투석_영양식생활관리_2권",
+        "혈액투석_영양식생활관리_2권",
+        "혈액투석_영양식생활관리_2권",
+        "혈액투석_영양식생활관리_2권"
+      ],
+      "top_scores": [
+        0.5123,
+        0.4824,
+        0.4178,
+        0.4155,
+        0.4097
+      ],
+      "hit@1": false,
+      "hit@3": true,
+      "hit@5": true,
+      "n_relevant_after_gate": 5,
+      "elapsed_s": 0.365,
+      "routing_correct": true
+    },
+    {
+      "id": "fish1",
+      "category": "특정 재료 질문",
+      "type": "rag",
+      "question": "생선은 얼마나 드셔도 되나요?",
+      "expected_source": [
+        "콩팥병_환자를_위한_안내서"
+      ],
+      "top_sources": [
+        "혈액투석_영양식생활관리_2권",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "혈액투석_영양식생활관리_2권"
+      ],
+      "top_scores": [
+        0.2876,
+        0.2842,
+        0.2732,
+        0.2662,
+        0.2635
+      ],
+      "hit@1": false,
+      "hit@3": true,
+      "hit@5": true,
+      "n_relevant_after_gate": 5,
+      "elapsed_s": 0.461,
+      "routing_correct": true
+    },
+    {
+      "id": "oos1",
+      "category": "out-of-scope",
+      "type": "out_of_scope",
+      "question": "오늘 서울 날씨 어때?",
+      "top_sources": [
+        "만성콩팥병_환자_식사요법",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서"
+      ],
+      "top_scores": [
+        0.1941,
+        0.1913,
+        0.1899,
+        0.1884,
+        0.1869
+      ],
+      "correctly_refused": false,
+      "routing_correct": true
+    },
+    {
+      "id": "oos2",
+      "category": "out-of-scope",
+      "type": "out_of_scope",
+      "question": "어제 축구 경기 결과 알려줘",
+      "top_sources": [
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서"
+      ],
+      "top_scores": [
+        0.2734,
+        0.2532,
+        0.2333,
+        0.2313,
+        0.2281
+      ],
+      "correctly_refused": false,
+      "routing_correct": true
+    },
+    {
+      "id": "oos3",
+      "category": "out-of-scope",
+      "type": "out_of_scope",
+      "question": "요즘 비트코인 시세가 어떻게 되나요?",
+      "top_sources": [
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "만성콩팥병_환자_식사요법",
+        "콩팥병_환자를_위한_안내서"
+      ],
+      "top_scores": [
+        0.1965,
+        0.184,
+        0.1833,
+        0.1762,
+        0.1744
+      ],
+      "correctly_refused": false,
+      "routing_correct": true
+    },
+    {
+      "id": "oos4",
+      "category": "out-of-scope",
+      "type": "out_of_scope",
+      "question": "다음 주 로또 번호 추천해줘",
+      "top_sources": [
+        "콩팥병_환자를_위한_안내서",
+        "혈액투석_영양식생활관리_2권",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서",
+        "콩팥병_환자를_위한_안내서"
+      ],
+      "top_scores": [
+        0.2716,
+        0.2528,
+        0.2384,
+        0.237,
+        0.232
+      ],
+      "correctly_refused": false,
+      "routing_correct": true
+    },
+    {
+      "id": "oos5",
+      "category": "out-of-scope",
+      "type": "out_of_scope",
+      "question": "재미있는 영화 추천해줘",
+      "top_sources": [
+        "혈액투석_영양식생활관리_2권",
+        "혈액투석_영양식생활관리_2권",
+        "혈액투석_영양식생활관리_2권",
+        "콩팥병_환자를_위한_안내서",
+        "혈액투석_영양식생활관리_2권"
+      ],
+      "top_scores": [
+        0.2361,
+        0.2313,
+        0.2142,
+        0.2107,
+        0.2091
+      ],
+      "correctly_refused": false,
+      "routing_correct": true
+    },
+    {
+      "id": "food1",
+      "category": "특정 재료 질문",
+      "type": "food_db",
+      "question": "바나나 먹어도 되나요?",
+      "expected_food_prefix": "바나나, 생것",
+      "matched_food": "바나나, 생것",
+      "routing_correct": true
+    },
+    {
+      "id": "food2",
+      "category": "특정 재료 질문",
+      "type": "food_db",
+      "question": "말린 바나나 먹어도 되나요?",
+      "expected_food_prefix": "바나나, 동결건조",
+      "matched_food": "바나나, 동결건조",
+      "routing_correct": true
+    },
+    {
+      "id": "food3",
+      "category": "특정 재료 질문",
+      "type": "food_db",
+      "question": "시금치 많이 먹으면 안 되나요?",
+      "expected_food_prefix": "시금치, 생것",
+      "matched_food": "시금치, 생것",
+      "routing_correct": true
+    },
+    {
+      "id": "food4",
+      "category": "특정 재료 질문",
+      "type": "food_db",
+      "question": "통조림 복숭아 먹어도 되나요?",
+      "expected_food_prefix": "복숭아, 백도, 통조림",
+      "matched_food": "복숭아, 백도, 통조림",
+      "routing_correct": true
+    },
+    {
+      "id": "food5",
+      "category": "특정 재료 질문",
+      "type": "food_db",
+      "question": "사과 먹어도 되나요?",
+      "expected_food_prefix": "사과, 생것",
+      "matched_food": "사과, 생것",
+      "routing_correct": true
+    }
+  ]
+}

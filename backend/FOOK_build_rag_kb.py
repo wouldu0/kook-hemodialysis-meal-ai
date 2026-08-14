@@ -33,6 +33,27 @@ def split_paragraphs(t):
     return paras
 
 
+# 목차/표제 전용 문단(TOC) 필터: "N. 제목 \n 쪽번호" 형태(제목 줄과 쪽번호 줄이 분리돼 있어도
+# 매치되도록 \s 로 줄바꿈까지 흡수)가 한 문단 안에서 다수 반복되고, 그 매치들이 문단 글자수의
+# 절반 이상을 차지할 때만 목차로 판단한다. 임상 지침의 번호목록("1. 하루 물 섭취량은 1.5L...")이나
+# 영양표(숫자만 나열)는 줄 끝이 페이지번호처럼 "숫자 하나로 뚝 끊기지" 않고 단위/조사/문장으로 끝나므로
+# 이 패턴에 걸리지 않는다 — 실제 539개 청크 dry-run에서 오탐 0건 확인됨(evaluation 참고).
+TOC_LINE_RE = re.compile(r'^\s*\d{1,3}\.\s+\S.{0,80}?\s\d{1,4}\s*$', re.MULTILINE)
+TOC_MIN_MATCHES = 4     # 우연히 번호목록 끝에 숫자가 한두 번 오는 것과 구분하기 위한 최소 반복 횟수
+TOC_MIN_RATIO = 0.5     # 매치된 글자수가 문단 전체의 절반 이상이어야 함(목차가 문단을 지배해야 함)
+
+
+def is_toc_paragraph(p):
+    """번호+제목+쪽번호가 반복되는 목차/표제 전용 문단이면 True. 실제 설명 문장이 섞인 문단은
+    매치 비율(ratio)이 낮아져 False가 되므로 보수적으로 동작한다."""
+    matches = list(TOC_LINE_RE.finditer(p))
+    if len(matches) < TOC_MIN_MATCHES:
+        return False
+    span = sum(len(mo.group()) for mo in matches)
+    ratio = span / max(len(p), 1)
+    return ratio >= TOC_MIN_RATIO
+
+
 MAX_HARD_CHARS = 3000   # 이보다 긴 단일 '문단'(표·목차 등 줄바꿈 없는 구간)은 강제로 잘라 임베딩 토큰 한도 방지
 
 
@@ -86,8 +107,11 @@ def main():
         raw = open(path, encoding='utf-8').read()
         cleaned = clean_text(raw)
         paras = split_paragraphs(cleaned)
+        n_before = len(paras)
+        paras = [p for p in paras if not is_toc_paragraph(p)]
+        n_toc = n_before - len(paras)
         chunks = chunk_paragraphs(paras, source)
-        print(f'{source}: 문단 {len(paras)}개 -> 청크 {len(chunks)}개')
+        print(f'{source}: 문단 {n_before}개 (목차성 문단 {n_toc}개 제외) -> 청크 {len(chunks)}개')
         all_chunks.extend(chunks)
 
     print(f'\n총 청크 수: {len(all_chunks)}')

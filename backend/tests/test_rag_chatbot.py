@@ -173,7 +173,15 @@ def test_answer_refuses_without_calling_llm_when_no_relevant_evidence(monkeypatc
         raise AssertionError('관련 근거가 없으면 LLM을 호출하면 안 된다')
     monkeypatch.setattr(C, '_client', _fail_client)
 
-    text, sources = C.answer('오늘 날씨 어때?')
+    # 이 테스트가 검증하려는 건 RAG_MIN_SCORE 관련성 게이트(retrieve()는 호출됐지만 결과가 전부
+    # 임계값 미만이라 LLM을 호출하지 않는 경로)이지 scope gate가 아니다 — 질문은 반드시 scope
+    # gate를 통과하는(IN_SCOPE) 질문이어야 아래 흐름이 실제로 _relevant() 게이트까지 도달한다
+    # (2026-08-14 scope gate 도입 전에는 "오늘 날씨 어때?"로도 이 경로를 탔지만, 지금은 그 질문
+    # 자체가 scope gate에서 먼저 막혀 retrieve()가 아예 호출되지 않는다 — 그건 별도로
+    # test_answer_out_of_scope_never_calls_retrieve()가 검증한다).
+    question = '칼륨 수치가 너무 높아지면 몸에 어떤 문제가 생기나요?'
+    assert C.classify_scope(question).verdict == C.IN_SCOPE
+    text, sources = C.answer(question)
     assert text == C.NO_EVIDENCE_ANSWER
     assert sources == []
 
@@ -363,6 +371,104 @@ def test_food_lookup_answer_meals_left_changes_scope_text(monkeypatch, real_nut)
     assert text_meal.endswith('▶ 결론: 지금 더 드셔도 됩니다')
 
 
+# ═══════════════ 7) 경량 재정렬(rerank) — 어휘 보너스 vs 게이트 안전성 ══════════
+# 이 블록의 핵심 목적: alpha=0.05 어휘 재정렬이 "순서만" 바꿀 뿐 "게이트 통과 여부"에는 절대
+# 관여하지 않는다는 것을 못박는 회귀 테스트다(reranking_experiment.py에서 alpha=0.15가 out-of-scope
+# 질문 게이트를 오통과시킨 사례가 있었기 때문에, 이 분리가 이번 변경 전체에서 가장 중요한 불변식).
+
+def test_lexical_bonus_can_reorder_gate_passed_candidates(monkeypatch):
+    # 두 후보 모두 RAG_MIN_SCORE를 넘어 게이트를 통과한 상태. 순수 임베딩 점수로는 b가 a보다
+    # 근소하게 높지만(원 순위 a<b가 아니라 b가 1위), 어휘 중복은 a가 훨씬 크다 — alpha=0.05
+    # 보너스가 충분히 크면(질문 토큰이 여러 개고 a가 전부 포함) 재정렬 후 a가 1위로 올라가야 한다.
+    monkeypatch.setattr(C, 'RAG_MIN_SCORE', 0.30)
+    monkeypatch.setattr(C, 'RAG_LEXICAL_ALPHA', 0.05)
+    hits = [
+        {'source': 'b', 'text': '이 문서는 질문과 별 상관없는 일반적인 내용입니다.', 'score': 0.42},
+        {'source': 'a', 'text': '바나나 칼륨 함량은 혈액투석 환자가 섭취 시 주의해야 합니다.', 'score': 0.40},
+    ]
+    question = '바나나 칼륨 함량 섭취 주의해야 하나요?'
+    reranked = C._rerank(question, hits)
+    assert [h['source'] for h in reranked][0] == 'a'
+    # 원본 score는 절대 변경되지 않아야 한다(재정렬은 새 rerank_score 필드로만).
+    a = next(h for h in reranked if h['source'] == 'a')
+    b = next(h for h in reranked if h['source'] == 'b')
+    assert a['score'] == pytest.approx(0.40)
+    assert b['score'] == pytest.approx(0.42)
+    assert a['rerank_score'] > a['score']   # 보너스가 실제로 더해졌음
+
+
+def test_lexical_bonus_never_lets_a_below_threshold_candidate_pass_the_gate(monkeypatch):
+    # 게이트(=_relevant) 미만 점수의 후보는 어휘 중복이 100%로 최대여도(=완전 일치) 여전히
+    # 게이트에서 탈락해야 한다 — _rerank()는 _relevant() *이후*에만 호출되는 구조이므로, 이 후보는
+    # 애초에 _rerank()에 전달조차 되지 않아야 한다. answer()의 실제 파이프라인을 통해 확인한다.
+    monkeypatch.setattr(C, 'RAG_MIN_SCORE', 0.30)
+    monkeypatch.setattr(C, 'RAG_LEXICAL_ALPHA', 0.05)
+    monkeypatch.setattr(C, 'find_food', lambda q: None)
+    question = '콩팥병 환자는 칼륨을 어떻게 관리해야 하나요?'
+    low_score_but_perfect_lexical_match = {
+        'source': 'low', 'text': question,   # 어휘 보너스 = 1.0 (완전 일치)
+        'score': 0.10,   # RAG_MIN_SCORE(0.30)보다 한참 낮음
+    }
+    monkeypatch.setattr(C, 'retrieve', lambda q, top_k=5: [low_score_but_perfect_lexical_match])
+
+    def _fail_client():
+        raise AssertionError('게이트를 통과 못 했으면 LLM을 호출하면 안 된다')
+    monkeypatch.setattr(C, '_client', _fail_client)
+
+    text, sources = C.answer(question)
+    # 참고: score(0.10) + alpha(0.05)*bonus(1.0) = 0.15 < RAG_MIN_SCORE(0.30) — 설령 재정렬
+    # 점수로 비교했더라도 여전히 게이트를 넘지 못했을 값이지만, 애초에 _relevant()가 원점수(raw
+    # score=0.10)만으로 걸러내므로 rerank_score라는 값 자체가 계산되지도 않는다.
+    assert text == C.NO_EVIDENCE_ANSWER
+    assert sources == []
+
+
+def test_lexical_alpha_defaults_to_0_05():
+    assert C.RAG_LEXICAL_ALPHA == pytest.approx(0.05)
+
+
+def test_final_context_capped_at_5_even_when_more_pass_gate(monkeypatch):
+    monkeypatch.setattr(C, 'find_food', lambda q: None)
+    monkeypatch.setattr(C, 'RAG_MIN_SCORE', 0.30)
+    monkeypatch.setattr(C, 'RAG_CANDIDATE_POOL', 10)
+    monkeypatch.setattr(C, 'RAG_CONTEXT_MAX', 5)
+    # 10개 후보 모두 게이트 통과(0.30 이상) — 최종 컨텍스트는 5개로 잘려야 한다.
+    hits = [{'source': f's{i}', 'text': f'칼륨 관련 내용 {i}', 'score': 0.30 + 0.01 * i}
+            for i in range(10)]
+    captured = {}
+
+    def fake_retrieve(q, top_k=5):
+        captured['top_k'] = top_k
+        return hits
+
+    monkeypatch.setattr(C, 'retrieve', fake_retrieve)
+    monkeypatch.setattr(C, '_client', lambda: FakeClient(chat_content='답변'))
+
+    text, sources = C.answer('칼륨이 많은 음식은?')
+    assert captured['top_k'] == 10   # RAG_CANDIDATE_POOL 만큼 넓게 후보를 가져와야 함
+    assert len(sources) == 5   # 10개 모두 게이트 통과해도 최종 컨텍스트는 RAG_CONTEXT_MAX(5)로 캡
+
+
+def test_retrieve_score_is_raw_cosine_not_reranked(monkeypatch):
+    # evaluation/ 스크립트들이 retrieve()를 직접 호출해 원 코사인 점수를 기대한다 — 재정렬은
+    # retrieve() 자체에는 절대 스며들면 안 된다(answer() 안에서만 사후 적용).
+    vecs = np.eye(2, dtype=np.float32)
+    kb = [{'text': '전혀 무관한 임의 텍스트 XYZ', 'source': 'srcA', 'embedding': vecs[0].tolist()},
+          {'text': '칼륨 칼륨 칼륨', 'source': 'srcB', 'embedding': vecs[1].tolist()}]
+    monkeypatch.setattr(C, '_KB', kb)
+    monkeypatch.setattr(C, '_KB_MAT', np.array(vecs, dtype=np.float32))
+    monkeypatch.setattr(C, '_client', lambda: FakeClient(query_vec=[1.0, 0.0]))
+
+    hits = C.retrieve('칼륨이 많은 음식은?', top_k=2)
+    # 질문 임베딩이 srcA와 정확히 일치하도록 설정했으므로(코사인=1.0), 어휘 중복은 srcB가
+    # 훨씬 크더라도(질문에 '칼륨'이 있고 srcB 텍스트에 '칼륨'이 반복) retrieve()의 score와
+    # 정렬 순서 자체는 순수 코사인 유사도만 반영해야 한다(rerank_score 키가 아예 없어야 함).
+    assert hits[0]['source'] == 'srcA'
+    assert hits[0]['score'] == pytest.approx(1.0)
+    assert hits[1]['score'] == pytest.approx(0.0, abs=1e-6)
+    assert all('rerank_score' not in h for h in hits)
+
+
 def test_food_lookup_answer_returns_none_when_no_potassium_data(monkeypatch, real_nut):
     # k100이 None인 재료는 칼륨 데이터가 없어 RAG로 폴백해야 한다(food_lookup_answer가 None 반환).
     ing_nut = real_nut[0]
@@ -370,3 +476,94 @@ def test_food_lookup_answer_returns_none_when_no_potassium_data(monkeypatch, rea
     assert no_k_items, '테스트 전제: DB에 칼륨 값이 없는 재료가 하나는 있어야 함'
     result = C.food_lookup_answer('이거 먹어도 되나요?', no_k_items[0])
     assert result is None
+
+
+# ═══════════════════════════ 8) scope gate (Method A) ═══════════════════════════
+# backend/evaluation/scope_gate_experiment.py에서 검증된 규칙 기반 "Method A"를 production에
+# 그대로 옮긴 classify_scope()에 대한 테스트. 이 블록의 핵심 목적은 두 가지 구조적 불변식을
+# 증명하는 것이다: (1) find_food()가 scope gate보다 항상 먼저 실행되고 그 매칭이 우선한다,
+# (2) OUT_OF_SCOPE면 retrieve()(임베딩 API)도 LLM도 호출되지 않는다.
+
+def test_classify_scope_in_scope_for_dialysis_nutrition_question():
+    result = C.classify_scope('혈액투석 환자가 피해야 할 고칼륨 채소는 어떤 게 있나요?')
+    assert result.verdict == C.IN_SCOPE
+    assert result.reason == 'dialysis_nutrition'
+
+
+def test_classify_scope_out_of_scope_for_general_chitchat():
+    result = C.classify_scope('오늘 서울 날씨 어때?')
+    assert result.verdict == C.OUT_OF_SCOPE
+    assert result.reason == 'unrelated'
+
+
+def test_classify_scope_out_of_scope_for_hard_medical_question():
+    # 감기약/타이레놀 — SYSTEM 프롬프트가 "개인별 판단 필요 -> 의료진 상담"으로 분리한 약물
+    # 영역. domain 신호(투석/신장 등)가 전혀 없어 OUT_OF_SCOPE여야 한다.
+    result = C.classify_scope('감기 걸렸을 때 타이레놀 먹어도 되나요?')
+    assert result.verdict == C.OUT_OF_SCOPE
+    assert result.reason == 'other_medical_treatment'
+
+
+def test_classify_scope_out_of_scope_for_dialysis_procedure_not_nutrition():
+    # 투석 시술/장비 신호(동정맥루)가 있으면 domain 신호(투석)가 함께 있어도 영양과 무관한
+    # 시술 영역이므로 OUT_OF_SCOPE여야 한다(scope_gate_definitions.md §4-③).
+    result = C.classify_scope('투석용 혈관(동정맥루)이 막히지 않게 하려면 뭘 조심해야 하나요?')
+    assert result.verdict == C.OUT_OF_SCOPE
+    assert result.reason == 'dialysis_procedure_not_nutrition'
+
+
+def test_find_food_takes_priority_over_scope_gate(real_nut, monkeypatch):
+    # "바나나 먹어도 되나요?"는 도메인 키워드가 전혀 없어(scope_gate_experiment.py 실측:
+    # food_db 5문항 전부 텍스트만으로는 scope gate를 통과 못 함) 만약 scope gate가 find_food()
+    # 보다 먼저(또는 대신) 적용되면 이 질문은 잘못 차단된다. answer()가 find_food()를 먼저
+    # 호출해 food_db 경로로 라우팅하고 scope gate를 아예 건너뛰는지 확인한다.
+    assert C.classify_scope('바나나 먹어도 되나요?').verdict == C.OUT_OF_SCOPE   # 참고: 텍스트만 보면 OOS로 잘못 판정됨
+    monkeypatch.setattr(C, 'retrieve', lambda q, top_k=3: [])
+    monkeypatch.setattr(C, '_client', lambda: FakeClient(chat_content='바나나는 적당히 드셔도 됩니다.'))
+    text, sources = C.answer('바나나 먹어도 되나요?', weight=60,
+                              consumed={'E': 0, 'protein': 0, 'K': 0, 'P': 0, 'Na': 0, 'Na_season': 0})
+    assert text != C.OUT_OF_SCOPE_ANSWER
+    assert text.endswith('▶ 결론: 지금 더 드셔도 됩니다')   # food_db 경로(코드 확정 판정)로 실제로 도달했음
+
+
+def test_answer_out_of_scope_never_calls_retrieve(monkeypatch):
+    monkeypatch.setattr(C, 'find_food', lambda q: None)
+
+    def _fail_retrieve(q, top_k=5):
+        raise AssertionError('scope gate가 OUT_OF_SCOPE로 판정했으면 retrieve()를 호출하면 안 된다(임베딩 API 호출 낭비)')
+    monkeypatch.setattr(C, 'retrieve', _fail_retrieve)
+
+    def _fail_client():
+        raise AssertionError('scope gate가 OUT_OF_SCOPE로 판정했으면 LLM을 호출하면 안 된다')
+    monkeypatch.setattr(C, '_client', _fail_client)
+
+    text, sources = C.answer('감기 걸렸을 때 타이레놀 먹어도 되나요?')
+    assert text == C.OUT_OF_SCOPE_ANSWER
+    assert sources == []
+
+
+def test_answer_out_of_scope_returns_empty_sources_for_general_oos(monkeypatch):
+    monkeypatch.setattr(C, 'find_food', lambda q: None)
+    monkeypatch.setattr(C, 'retrieve', lambda q, top_k=5: (_ for _ in ()).throw(
+        AssertionError('OUT_OF_SCOPE 경로에서 retrieve()가 호출되면 안 된다')))
+    text, sources = C.answer('다음 주 로또 번호 추천해줘')
+    assert text == C.OUT_OF_SCOPE_ANSWER
+    assert sources == []
+
+
+def test_answer_in_scope_question_still_uses_rag_min_score_gate_and_rerank(monkeypatch):
+    # scope gate가 IN_SCOPE로 판정한 이후에는 기존 RAG_MIN_SCORE 게이트 + alpha=0.05 재정렬
+    # 파이프라인이 그대로(영향받지 않고) 동작해야 한다.
+    monkeypatch.setattr(C, 'find_food', lambda q: None)
+    monkeypatch.setattr(C, 'RAG_MIN_SCORE', 0.30)
+    monkeypatch.setattr(C, 'RAG_LEXICAL_ALPHA', 0.05)
+    hits = [{'source': 'good_doc', 'text': '칼륨이 많은 채소는 주의해야 합니다.', 'score': 0.5},
+            {'source': 'noise_doc', 'text': '전혀 무관한 내용', 'score': 0.02}]
+    monkeypatch.setattr(C, 'retrieve', lambda q, top_k=5: hits)
+    monkeypatch.setattr(C, '_client', lambda: FakeClient(chat_content='칼륨이 많은 채소를 주의하세요.'))
+
+    question = '혈액투석 환자가 피해야 할 고칼륨 채소는 어떤 게 있나요?'
+    assert C.classify_scope(question).verdict == C.IN_SCOPE
+    text, sources = C.answer(question)
+    assert text == '칼륨이 많은 채소를 주의하세요.'
+    assert sources == ['good_doc']   # RAG_MIN_SCORE 미만인 noise_doc은 여전히 걸러짐(scope gate와 무관)
