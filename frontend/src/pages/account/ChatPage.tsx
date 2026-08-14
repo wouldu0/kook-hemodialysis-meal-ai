@@ -20,6 +20,11 @@ export function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  // 대화 이력 전체가 아니라 "직전 응답이 어떤 재료 얘기였는가" 딱 그 값 하나만 들고 있는다 —
+  // "그럼 몇 조각?" 같은 한 턴짜리 음식 후속 질문 지원용(services/api.ts::askChat 주석 참고).
+  // 다른 채팅 상태와 마찬가지로 메모리(React state)에만 있고 새로고침하면 사라진다 — 영구
+  // 저장(localStorage) 안 함.
+  const [foodContext, setFoodContext] = useState<string | null>(null);
   const threadEnd = useRef<HTMLDivElement>(null);
 
   const send = async (question: string) => {
@@ -30,7 +35,10 @@ export function ChatPage() {
     setLoading(true);
     try {
       // 개인화(weight/consumed) 없이 일반 질문으로 보낸다 — services/api.ts::askChat 주석 참고.
-      const d = await askChat(q);
+      const d = await askChat(q, foodContext);
+      // 응답의 context_food로 항상 덮어쓴다(병합/유지 아님) — 화제가 음식이 아닌 쪽으로 바뀌면
+      // 서버가 null을 돌려주고, 그 순간 다음 질문에서 stale 컨텍스트가 새지 않도록 그대로 지운다.
+      setFoodContext(d.context_food ?? null);
       setMessages((prev) => [
         ...prev,
         { role: "assistant", text: d.answer, sources: d.sources || [] },

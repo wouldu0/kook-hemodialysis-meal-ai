@@ -830,3 +830,509 @@ def test_meal_planning_question_actually_reaches_rag_pipeline(monkeypatch):
     assert calls['retrieve'] == 1   # RAG 경로에 실제로 도달함(조기 OUT_OF_SCOPE 반환 아님)
     assert text != C.OUT_OF_SCOPE_ANSWER
     assert sources == ['meal_doc']
+
+
+# ═══════ 11) answer_with_context() — stateless 한 턴 음식 후속 질문 지원 (2026-08-14) ═══════
+# 실제 운영 QA 버그: "복숭아 먹어도 되나?"(food_db 정상 응답) 다음 "먹는다고 하면 몇조각
+# 먹을까?"가 완전히 stateless라 이번 턴 텍스트만으로는 신호가 없어 OUT_OF_SCOPE로 잘못 빠짐.
+# 대화 이력 전체나 서버 세션은 전혀 안 쓰고, 클라이언트가 직전 응답에서 그대로 돌려보낸
+# canonical 재료명 문자열(context_food) 하나만 힌트로 받는 answer_with_context()를 검증한다.
+# OpenAI 라이브 호출은 여기서도 전혀 하지 않는다(파일 docstring 원칙 그대로) — LIVE 검증은
+# 이 파일 밖에서 별도로 수행한다(작업 지시의 "Live QA" 섹션).
+_CONSUMED_ZERO = {'E': 0, 'protein': 0, 'K': 0, 'P': 0, 'Na': 0, 'Na_season': 0}
+
+
+def _mock_food_llm(monkeypatch, chat_content='(테스트용 LLM 응답)'):
+    """answer_with_context()가 food_lookup_answer()/answer() 어느 경로로 가든 실제 OpenAI를
+    절대 호출하지 않도록 retrieve()/embeddings/chat.completions를 전부 무해하게 모킹한다."""
+    monkeypatch.setattr(C, 'retrieve', lambda q, top_k=3: [])
+    monkeypatch.setattr(C, '_client', lambda: FakeClient(chat_content=chat_content))
+
+
+def _fail_retrieve_and_llm(monkeypatch, label):
+    def _fail_retrieve(q, top_k=5):
+        raise AssertionError(f'{label}: retrieve()가 호출되면 안 된다')
+    monkeypatch.setattr(C, 'retrieve', _fail_retrieve)
+
+    def _fail_client():
+        raise AssertionError(f'{label}: LLM이 호출되면 안 된다')
+    monkeypatch.setattr(C, '_client', _fail_client)
+
+
+# ── (1) 이번 질문에 명시적 재료명이 있으면 context_food는 완전히 무시하고 그게 이긴다 ──
+def test_answer_with_context_explicit_food_beats_context_food(real_nut, monkeypatch):
+    _mock_food_llm(monkeypatch)
+    text, sources, ctx = C.answer_with_context(
+        '그럼 사과는 먹어도 돼?', context_food='복숭아, 백도, 생것',
+        weight=60, consumed=_CONSUMED_ZERO)
+    assert ctx == '사과, 생것'   # context_food(복숭아)가 아니라 이번 질문의 명시적 재료(사과)
+
+
+# ── (2) 유효한 후속 질문 + 유효한 context_food -> food_lookup_answer()를 통해 context food 사용 ──
+def test_answer_with_context_valid_followup_uses_context_food_via_food_lookup_answer(real_nut, monkeypatch):
+    spy = SpyClient(chat_content='(임의 응답)')
+    monkeypatch.setattr(C, 'retrieve', lambda q, top_k=3: [])
+    monkeypatch.setattr(C, '_client', lambda: spy)
+
+    text, sources, ctx = C.answer_with_context(
+        '먹는다고 하면 몇조각 먹을까?', context_food='복숭아, 백도, 생것',
+        weight=60, consumed=_CONSUMED_ZERO)
+    assert ctx == '복숭아, 백도, 생것'
+    assert '▶ 결론' in text   # food_lookup_answer()의 개인화 판정 안전장치가 그대로 적용됨
+    # food_lookup_answer()가 실제로 호출됐다는 근거: 프롬프트에 복숭아 실측 facts가 들어있어야 함.
+    call = spy._spy_completions.calls[0]
+    user_msg = next(m['content'] for m in call['messages'] if m['role'] == 'user')
+    assert '재료명: 복숭아, 백도, 생것' in user_msg
+
+
+# ── (3) 후속 질문 모양이 아닌 무관한 질문은 context_food를 무시하고 기존 answer() 그대로 ──
+def test_answer_with_context_unrelated_question_ignores_context(monkeypatch):
+    _fail_retrieve_and_llm(monkeypatch, '무관한 질문인데 retrieve/LLM 호출')
+    monkeypatch.setattr(C, 'find_food', lambda q: None)
+    text, sources, ctx = C.answer_with_context(
+        '저녁 영화 뭐 볼까?', context_food='복숭아, 백도, 생것')
+    assert text == C.OUT_OF_SCOPE_ANSWER
+    assert ctx is None
+
+
+# ── (4) 의료 red-flag 질문은 context_food를 무시/override하고 여전히 차단됨 (Case G, 안전 핵심) ──
+def test_answer_with_context_redflag_question_ignores_context_and_stays_blocked(monkeypatch):
+    _fail_retrieve_and_llm(monkeypatch, 'red-flag 질문인데 retrieve/LLM 호출(peach context 유출 의심)')
+    monkeypatch.setattr(C, 'find_food', lambda q: None)
+    text, sources, ctx = C.answer_with_context(
+        '그럼 타이레놀은 얼마나 먹어?', context_food='복숭아, 백도, 생것')
+    assert text == C.OUT_OF_SCOPE_ANSWER   # 절대 복숭아 food_db 답변이 되면 안 됨
+    assert sources == []
+    assert ctx is None
+
+
+# ── (5) 존재하지 않는 context_food는 무시되고(신뢰하지 않음) 정상 폴백 ──
+def test_answer_with_context_invalid_context_food_is_ignored(monkeypatch):
+    _fail_retrieve_and_llm(monkeypatch, '무효 context_food인데 retrieve/LLM 호출')
+    monkeypatch.setattr(C, 'find_food', lambda q: None)
+    text, sources, ctx = C.answer_with_context('그럼 얼마나?', context_food='NOT_A_REAL_FOOD')
+    assert text == C.OUT_OF_SCOPE_ANSWER   # 신호가 '그럼 얼마나?' 자체는 후속 질문 모양이지만
+    assert ctx is None                     # context_food가 무효라 food 경로로 못 감
+
+
+# ── (6)/(7) food-DB 응답과 food-followup 응답 모두 올바른 canonical context_food를 반환 ──
+def test_answer_with_context_food_db_response_returns_canonical_context_food(real_nut, monkeypatch):
+    _mock_food_llm(monkeypatch)
+    text, sources, ctx = C.answer_with_context('복숭아 먹어도 되나?', weight=60, consumed=_CONSUMED_ZERO)
+    assert ctx == '복숭아, 백도, 생것'
+
+
+def test_answer_with_context_food_followup_response_returns_same_canonical_context_food(real_nut, monkeypatch):
+    _mock_food_llm(monkeypatch)
+    text1, sources1, ctx1 = C.answer_with_context('복숭아 먹어도 되나?', weight=60, consumed=_CONSUMED_ZERO)
+    text2, sources2, ctx2 = C.answer_with_context(
+        '먹는다고 하면 몇조각 먹을까?', context_food=ctx1, weight=60, consumed=_CONSUMED_ZERO)
+    assert ctx2 == ctx1   # 후속 턴도 같은 canonical 재료명을 그대로 유지해 돌려줌
+
+
+# ── (8) 음식과 무관한 응답(RAG/끼니계획/OOS)은 항상 context_food=None을 반환 ──
+def test_answer_with_context_non_food_response_returns_context_food_none(monkeypatch):
+    monkeypatch.setattr(C, 'find_food', lambda q: None)
+    monkeypatch.setattr(C, 'retrieve', lambda q, top_k=5: [
+        {'source': 'meal_doc', 'text': '한 끼 식단 구성 예시입니다.', 'score': 0.5}])
+    monkeypatch.setattr(C, '_client', lambda: FakeClient(chat_content='AI 식단 생성 기능을 활용해보세요.'))
+    text, sources, ctx = C.answer_with_context('저녁 뭐 먹지?', context_food='복숭아, 백도, 생것')
+    assert ctx is None
+    assert text != C.OUT_OF_SCOPE_ANSWER   # 실제로 RAG 경로까지 도달했음(끼니 계획은 IN_SCOPE)
+
+
+# ── (9) 기존 요청 형태(context_food 필드 자체가 없음)도 그대로 동작 — 하위호환 ──
+def test_answer_with_context_backward_compatible_without_context_food_arg(real_nut, monkeypatch):
+    _mock_food_llm(monkeypatch)
+    # context_food 인자를 아예 안 준 기존 호출부 시뮬레이션(default=None)
+    text, sources, ctx = C.answer_with_context('복숭아 먹어도 되나?', weight=60, consumed=_CONSUMED_ZERO)
+    assert ctx == '복숭아, 백도, 생것'
+    assert '▶ 결론' in text
+
+
+def test_chat_req_backward_compatible_without_context_food_field():
+    # API 계약 레벨: ChatReq(question=...)만 줘도(기존 클라이언트 요청 형태) 여전히 검증 통과하고
+    # context_food는 기본값 None.
+    from schemas import ChatReq
+    req = ChatReq(question='복숭아 먹어도 되나요?')
+    assert req.context_food is None
+    req2 = ChatReq(question='복숭아 먹어도 되나요?', context_food='복숭아, 백도, 생것')
+    assert req2.context_food == '복숭아, 백도, 생것'
+
+
+# ── (10) follow-up 경로로 도달해도 기존 K/P/Na 판정/▶ 결론 안전장치가 그대로 적용됨 ──
+def test_answer_with_context_followup_path_preserves_verdict_safety_net(real_nut, monkeypatch):
+    # LLM이 반대로 말해도(기존 food_lookup_answer 안전장치 테스트와 동일한 방식) 최종 결론은
+    # 코드가 계산한 값으로 못박혀야 한다 — follow-up 경로도 food_lookup_answer()를 그대로 재사용
+    # 하므로 이 안전장치가 재구현 없이 그대로 적용되는지 확인.
+    monkeypatch.setattr(C, 'retrieve', lambda q, top_k=3: [])
+    monkeypatch.setattr(C, '_client', lambda: FakeClient(chat_content='괜찮아요! 많이 드세요!'))
+    # 바나나, 생것 1회분(120g) 칼륨 ≈ 426mg. 하루 Kmax=3000인데 이미 2700 먹었으면 남은 예산 300 < 426.
+    consumed = {'E': 0, 'protein': 0, 'K': 2700, 'P': 0, 'Na': 0, 'Na_season': 0}
+    text, sources, ctx = C.answer_with_context(
+        '그럼 얼마나 먹어?', context_food='바나나, 생것', weight=60, consumed=consumed)
+    assert ctx == '바나나, 생것'
+    assert text.split('▶ 결론:')[-1].strip() == '지금은 피하시는 게 좋습니다'
+
+
+# ── (11) 이 변경이 retrieve()/_relevant()/_rerank()/classify_scope()의 기존 동작을 전혀
+#         바꾸지 않았는지 재확인(빠른 sanity 재검증 — 새 함수를 추가만 했을 뿐 기존 함수 본문은
+#         손대지 않았으므로 이미 위 160개 기존 테스트가 이를 보장하지만, 이 변경 작업 맥락에서
+#         한 번 더 명시적으로 못박는다) ──
+def test_existing_scope_and_retrieval_pipeline_unaffected_by_new_context_feature(monkeypatch):
+    assert C.classify_scope('바나나 먹어도 되나요?').verdict == C.OUT_OF_SCOPE   # find_food 우선 케이스, 불변
+    assert C.classify_scope('감기 걸렸을 때 타이레놀 먹어도 되나요?').verdict == C.OUT_OF_SCOPE
+    assert C.classify_scope('저녁 뭐 먹지?').verdict == C.IN_SCOPE
+    hits = [{'source': 'a', 'text': 'x', 'score': 0.5}, {'source': 'b', 'text': 'y', 'score': 0.02}]
+    assert C._relevant(hits) == [hits[0]]   # RAG_MIN_SCORE 게이트 불변
+    # answer()는 이번 작업에서 시그니처/반환 계약을 전혀 바꾸지 않았다 — 2-tuple 그대로.
+    monkeypatch.setattr(C, 'find_food', lambda q: None)
+    monkeypatch.setattr(C, 'retrieve', lambda q, top_k=5: (_ for _ in ()).throw(
+        AssertionError('OUT_OF_SCOPE인데 retrieve() 호출됨')))
+    result = C.answer('다음 주 로또 번호 추천해줘')
+    assert isinstance(result, tuple) and len(result) == 2
+    text, sources = result
+    assert text == C.OUT_OF_SCOPE_ANSWER
+
+
+# ── (12) 조각/개수 hallucination 방지 — "몇 조각" 후속 질문에는 프롬프트에 개수를 지어내지
+#         말라는 지시가 실제로 포함돼 있어야 한다(구조적 검증, LLM 응답 문자열 자체는 모킹돼
+#         고정값이므로 의미 없음 — 프롬프트에 안전 지시가 전달됐는지가 검증 대상) ──
+def test_food_lookup_answer_prompt_forbids_piece_count_invention_when_asked(real_nut, monkeypatch):
+    spy = SpyClient(chat_content='2~3조각 정도 드셔도 됩니다.')   # LLM이 개수를 지어내는 최악의 경우를 가정
+    monkeypatch.setattr(C, 'retrieve', lambda q, top_k=3: [])
+    monkeypatch.setattr(C, '_client', lambda: spy)
+
+    text, sources, ctx = C.answer_with_context(
+        '먹는다고 하면 몇조각 먹을까?', context_food='복숭아, 백도, 생것',
+        weight=60, consumed=_CONSUMED_ZERO)
+    call = spy._spy_completions.calls[0]
+    user_msg = next(m['content'] for m in call['messages'] if m['role'] == 'user')
+    assert '조각' in user_msg and ('지어내지 마' in user_msg or '새로 지어내지' in user_msg)
+    assert 'g' in user_msg.lower() or '섭취 기준량' in user_msg   # g 기준 안내로 유도하는 문구 포함
+
+
+def test_food_lookup_answer_no_piece_count_instruction_when_not_asked(real_nut, monkeypatch):
+    # "몇 조각" 신호가 없는 평범한 재료 질문에는 이 안전 문구를 굳이 추가하지 않는다(불필요한
+    # 프롬프트 비대화 방지) — _asks_piece_count()가 False인 경우 instruction에 조각 관련 문구가
+    # 안 붙는지 확인.
+    spy = SpyClient(chat_content='적당량 드셔도 됩니다.')
+    monkeypatch.setattr(C, 'retrieve', lambda q, top_k=3: [])
+    monkeypatch.setattr(C, '_client', lambda: spy)
+    text, sources = C.food_lookup_answer('바나나 먹어도 되나요?', '바나나, 생것',
+                                          weight=60, consumed=_CONSUMED_ZERO)
+    call = spy._spy_completions.calls[0]
+    user_msg = next(m['content'] for m in call['messages'] if m['role'] == 'user')
+    assert '조각' not in user_msg
+
+
+# ═══════════ Section 15 다중 턴 시나리오 (mocked, LIVE는 이 파일 밖에서 별도 검증) ══════════
+def test_case_a_peach_piece_count_followup_not_out_of_scope(real_nut, monkeypatch):
+    # 실제 보고된 버그 시퀀스(모킹판): "복숭아 먹어도 되나?" -> "먹는다고 하면 몇조각 먹을까?"
+    _mock_food_llm(monkeypatch)
+    text1, sources1, ctx1 = C.answer_with_context('복숭아 먹어도 되나?', weight=60, consumed=_CONSUMED_ZERO)
+    assert ctx1 == '복숭아, 백도, 생것'
+    text2, sources2, ctx2 = C.answer_with_context(
+        '먹는다고 하면 몇조각 먹을까?', context_food=ctx1, weight=60, consumed=_CONSUMED_ZERO)
+    assert text2 != C.OUT_OF_SCOPE_ANSWER   # 더 이상 OUT_OF_SCOPE로 잘못 빠지지 않음(버그 재현 대상)
+    assert '재료명: 복숭아' in text2 or ctx2 == '복숭아, 백도, 생것'
+    assert ctx2 == ctx1
+
+
+def test_case_e_topic_switch_to_meal_planning_clears_context_and_stays_cleared(monkeypatch):
+    # "복숭아 먹어도 돼?" -> "저녁 뭐 먹지?"(끼니계획, context_food는 반드시 None) ->
+    # "그럼 몇 조각?" + context_food=None(프론트가 이미 지운 상태) -> 복숭아가 되살아나면 안 됨.
+    monkeypatch.setattr(C, 'find_food', lambda q: {'복숭아 먹어도 돼?': '복숭아, 백도, 생것'}.get(q))
+    monkeypatch.setattr(C, 'retrieve', lambda q, top_k=5: [
+        {'source': 'meal_doc', 'text': '한 끼 식단 구성 예시입니다.', 'score': 0.5}])
+    monkeypatch.setattr(C, '_client', lambda: FakeClient(chat_content='AI 식단 생성 기능을 활용해보세요.'))
+
+    _, _, ctx_mid = C.answer_with_context('저녁 뭐 먹지?', context_food='복숭아, 백도, 생것')
+    assert ctx_mid is None
+
+    text3, sources3, ctx3 = C.answer_with_context('그럼 몇 조각?', context_food=None)
+    assert ctx3 is None
+    assert '복숭아' not in text3   # 되살아나지 않음(고정 OOS 문구에는 애초에 재료명이 없음)
+
+
+# ═══════ 16) Bug1 — 조각/개수 질문의 무관한 "자료 없음" 서술 제거 (2026-08-14) ═══════
+# 실측 재현: "복숭아 먹어도 되나?" -> "먹는다고 하면 몇조각 먹을까?"에서 LLM이 "조리법과 관련된
+# 주의사항은 제공된 자료에서 확인할 수 없습니다" 같은, 사용자가 묻지도 않은 주제에 대한 무관한
+# 문장을 답변에 끼워넣었다. 프롬프트 구조(step3 완전 대체 + "자료 없음" narrate 금지)를
+# 검증한다 — 실제 LLM 산문은 라이브 QA에서만 확인(이 파일은 항상 모킹).
+
+def test_piece_count_instruction_forbids_narrating_missing_evidence(real_nut, monkeypatch):
+    spy = SpyClient(chat_content='임의의 LLM 응답')
+    monkeypatch.setattr(C, 'retrieve', lambda q, top_k=3: [])
+    monkeypatch.setattr(C, '_client', lambda: spy)
+
+    text, sources = C.food_lookup_answer('복숭아 몇 조각 먹어도 돼?', '복숭아, 백도, 생것',
+                                          weight=60, consumed=_CONSUMED_ZERO)
+    call = spy._spy_completions.calls[0]
+    user_msg = next(m['content'] for m in call['messages'] if m['role'] == 'user')
+    # "제공된 자료에서 확인할 수 없다"는 식으로 없다는 사실 자체를 narrate하지 말라는 지시가 있어야 함
+    assert ('확인할 수 없' in user_msg) or ('없다는 사실' in user_msg)
+    assert '지어내지 마' in user_msg or '새로 지어내지' in user_msg
+    # 일반 조리법 팁 문구("무관하면 생략")는 조각 질문에서는 더 이상 별도로 남아있지 않아야 함 —
+    # step3가 완전히 대체됐는지(추가만 된 게 아닌지) 구조적으로 확인.
+    assert '조리법·주의사항 팁 한 줄만' not in user_msg
+
+
+def test_piece_count_instruction_still_forbids_number_invention(real_nut, monkeypatch):
+    spy = SpyClient(chat_content='2~3조각 정도 드셔도 됩니다.')
+    monkeypatch.setattr(C, 'retrieve', lambda q, top_k=3: [])
+    monkeypatch.setattr(C, '_client', lambda: spy)
+
+    text, sources = C.food_lookup_answer('복숭아 몇 조각 먹어도 돼?', '복숭아, 백도, 생것')
+    call = spy._spy_completions.calls[0]
+    user_msg = next(m['content'] for m in call['messages'] if m['role'] == 'user')
+    assert '조각' in user_msg and ('지어내지 마' in user_msg or '새로 지어내지' in user_msg)
+    assert '섭취 기준량' in user_msg   # g 기준 안내로 유도
+
+
+@pytest.mark.parametrize('question', [
+    '몇 알 먹어도 될까?', '몇알 먹어도 될까?', '몇 덩이 정도 먹어도 돼?', '몇덩이 먹어도 돼?',
+])
+def test_asks_piece_count_generalized_terms(question):
+    # Bug1 spec의 예시(몇 알/몇 덩이)로 _PIECE_COUNT_HINT_TERMS가 확장됐는지 확인.
+    assert C._asks_piece_count(question) is True
+
+
+def test_asks_piece_count_does_not_false_trigger_on_allergy():
+    # '알' 단독이 아니라 '몇 알'/'몇알'처럼 구체적 구문만 인정해야 한다 — '알레르기'처럼 무관한
+    # 단어에 오탐하지 않는지 확인.
+    assert C._asks_piece_count('알레르기 있는데 먹어도 되나요?') is False
+
+
+# ═══════ 17) Bug2 — 동사 없는 화제 전환 후속 질문("그럼 사과는?") 처리 (2026-08-14) ═══════
+# find_food()는 FOOD_QUESTION_KW가 없으면 절대 매칭하지 않으므로 "그럼 사과는?"은 늘 실패한다
+# (find_food() 자체는 건드리지 않음 — 아래에서 재확인). answer_with_context()에 새로 추가된
+# _find_food_switch_candidate() 기반 분기만 검증한다.
+
+def test_find_food_unchanged_no_verb_apple_question_still_fails(real_nut):
+    # find_food()는 이번 작업에서 관찰 가능한 동작이 전혀 바뀌지 않아야 한다 — "그럼 사과는?"처럼
+    # FOOD_QUESTION_KW가 없는 질문은 여전히 실패해야(Bug2가 존재했던 이유 자체) 한다.
+    assert C.find_food('그럼 사과는?') is None
+    assert C.find_food('사과는?') is None
+
+
+@pytest.mark.parametrize('question,expected_short', [
+    ('그럼 사과는?', '사과'),
+    ('사과는 어때', '사과'),
+    ('사과는 괜찮아', '사과'),
+    ('바나나는?', '바나나'),
+])
+def test_find_food_switch_candidate_detects_adjacent_topic_marker(real_nut, question, expected_short):
+    result = C._find_food_switch_candidate(question)
+    assert result is not None and result.startswith(expected_short)
+
+
+@pytest.mark.parametrize('question', [
+    '사과 색깔은?',       # 조사가 '색깔'에 붙어 있음 — 사과가 화제가 아님
+    '사과 사진 보여줘',    # 조사 자체가 없음
+])
+def test_find_food_switch_candidate_rejects_non_adjacent_false_positive(real_nut, question):
+    # Bug2 스펙이 명시한 핵심 오탐 방지 케이스 — "사과"가 idx에 실제로 존재해도(그래서 naive
+    # substring 매칭이면 걸렸을 것) 조사가 재료명에 직접 붙어있지 않으면 반드시 None.
+    idx, _ = C._food_index()
+    assert '사과' in idx, '테스트 전제: DB에 사과가 있어야 이 회귀가 의미 있음'
+    assert C._find_food_switch_candidate(question) is None
+
+
+@pytest.mark.parametrize('question', [
+    '사과는 바나나는 뭐가 나아?',   # 둘 다 조사가 직접 붙어 topicalize됨
+    '사과랑 바나나는 뭐가 나아?',   # (Bug3) 조사는 바나나에만 붙지만, 넓은 탐지가 사과도 함께
+                                    # 언급됐음을 먼저 잡아내야 한다 — 예전엔 이게 조용히
+                                    # '바나나'로만 좁혀지는 버그였다(하나를 임의 선택).
+    '오징어랑 두부는?',
+    '사과, 바나나는 어때?',
+])
+def test_find_food_switch_candidate_no_random_pick_on_genuine_ambiguity(real_nut, question):
+    # 서로 다른(canonical 기준) 재료가 2개 이상 언급되면, 조사가 그중 하나에만 우연히 붙어있어도
+    # 절대 하나를 임의로 고르지 않고 _MULTI_FOOD_AMBIGUOUS sentinel을 반환해야 한다.
+    assert C._find_food_switch_candidate(question) is C._MULTI_FOOD_AMBIGUOUS
+
+
+def test_distinct_canonical_foods_dedupes_same_food_different_expression(real_nut):
+    # "같은 음식 표현 중복은 multi-food로 세지 말 것" — '복숭아'와 '백도'가 같은 canonical
+    # 항목(복숭아, 백도, 생것)을 가리키면 서로 다른 음식 2개로 잘못 세면 안 된다.
+    idx, _ = C._food_index()
+    if '백도' in idx and '복숭아' in idx:
+        result = C._distinct_canonical_foods('복숭아랑 백도는 뭐가 나아?')
+        assert len(result) == 1
+
+
+def test_find_food_switch_candidate_none_for_non_food_nouns(real_nut):
+    for q in ('그럼 영화는?', '그럼 타이레놀은?', '그럼 로또는?'):
+        assert C._find_food_switch_candidate(q) is None
+
+
+# ── answer_with_context()에 실제로 배선됐는지 ──────────────────────────────────
+def test_answer_with_context_verbless_switch_resolves_to_new_food(real_nut, monkeypatch):
+    # Case C: 복숭아 컨텍스트 + "그럼 사과는?" -> 사과로 전환돼야 한다(버그였던 케이스).
+    _mock_food_llm(monkeypatch)
+    text, sources, ctx = C.answer_with_context(
+        '그럼 사과는?', context_food='복숭아, 백도, 생것', weight=60, consumed=_CONSUMED_ZERO)
+    assert ctx == '사과, 생것'
+    assert '재료명: 사과' in text or ctx == '사과, 생것'
+
+
+def test_answer_with_context_switch_takes_priority_over_old_context_continuation(real_nut, monkeypatch):
+    # 새 화제 전환 재료가 있으면 old context_food를 계속 쓰는 _is_food_followup_query() 경로보다
+    # 항상 이겨야 한다(스펙의 명시적 우선순위 요구) — "그럼 사과는?"은 마침 계속-질문 신호도
+    # 아니라 이 경로 하나로만 확인되지만, 스파이로 실제 food_lookup_answer 호출 대상이 사과임을
+    # 프롬프트 facts로 재확인한다.
+    spy = SpyClient(chat_content='(임의 응답)')
+    monkeypatch.setattr(C, 'retrieve', lambda q, top_k=3: [])
+    monkeypatch.setattr(C, '_client', lambda: spy)
+    text, sources, ctx = C.answer_with_context(
+        '그럼 사과는?', context_food='복숭아, 백도, 생것', weight=60, consumed=_CONSUMED_ZERO)
+    call = spy._spy_completions.calls[0]
+    user_msg = next(m['content'] for m in call['messages'] if m['role'] == 'user')
+    assert '재료명: 사과' in user_msg
+    assert ctx == '사과, 생것'
+
+
+def test_answer_with_context_squid_potassium_followup_unaffected_by_switch_logic(real_nut, monkeypatch):
+    # Case D: 오징어 -> "칼륨은?" — 새 로직 도입 후에도 기존 같은-재료 후속 질문 경로가 그대로
+    # 동작해야 한다(화제 전환 후보가 없으므로 기존 _is_food_followup_query() 경로로 폴백).
+    _mock_food_llm(monkeypatch)
+    text1, sources1, ctx1 = C.answer_with_context('오징어 먹어도 돼?', weight=60, consumed=_CONSUMED_ZERO)
+    assert ctx1 == '오징어, 생것'
+    text2, sources2, ctx2 = C.answer_with_context('칼륨은?', context_food=ctx1,
+                                                   weight=60, consumed=_CONSUMED_ZERO)
+    assert ctx2 == ctx1
+
+
+def test_answer_with_context_explicit_food_still_wins_over_switch_logic(real_nut, monkeypatch):
+    # Case H: 복숭아 컨텍스트 + 명시적 "사과 먹어도 돼?" — find_food()가 이미 먼저 잡으므로 이번
+    # 작업(3단계 분기)과 무관하게 계속 사과로 라우팅돼야 한다(기존 동작 불변 재확인).
+    _mock_food_llm(monkeypatch)
+    text, sources, ctx = C.answer_with_context(
+        '사과 먹어도 돼?', context_food='복숭아, 백도, 생것', weight=60, consumed=_CONSUMED_ZERO)
+    assert ctx == '사과, 생것'
+
+
+def test_answer_with_context_invalid_context_switch_shaped_question_falls_through_safely(monkeypatch):
+    # Case I: context_food가 무효면(precondition (c) 실패) 화제 전환 분기 자체가 아예 평가되지
+    # 않고 기존 안전 동작(여기선 OOS)으로 폴백해야 한다.
+    _fail_retrieve_and_llm(monkeypatch, '무효 context_food + 화제전환 모양인데 retrieve/LLM 호출')
+    monkeypatch.setattr(C, 'find_food', lambda q: None)
+    text, sources, ctx = C.answer_with_context('그럼 사과는?', context_food='NOT_A_REAL_FOOD')
+    assert text == C.OUT_OF_SCOPE_ANSWER
+    assert ctx is None
+
+
+@pytest.mark.parametrize('question', ['그럼 영화는?', '그럼 타이레놀은?', '그럼 로또는?'])
+def test_answer_with_context_non_food_nouns_never_call_food_lookup_answer(monkeypatch, question):
+    # mock-assert food_lookup_answer가 절대 호출되지 않는지 확인(영화/로또는 그냥 도메인
+    # 신호가 없어 OOS로, 타이레놀은 red-flag로 각각 다른 경로지만 결과는 동일 — food_lookup_answer
+    # 미호출 + 복숭아 컨텍스트가 새지 않음).
+    def _fail_food_lookup(*a, **kw):
+        raise AssertionError(f'{question!r}: food_lookup_answer가 호출되면 안 된다')
+    monkeypatch.setattr(C, 'food_lookup_answer', _fail_food_lookup)
+    monkeypatch.setattr(C, 'find_food', lambda q: None)
+    monkeypatch.setattr(C, 'retrieve', lambda q, top_k=5: [])
+    monkeypatch.setattr(C, '_client', lambda: FakeClient(chat_content='(응답)'))
+    text, sources, ctx = C.answer_with_context(question, context_food='복숭아, 백도, 생것')
+    assert ctx is None
+
+
+def test_answer_with_context_apple_color_question_does_not_misfire_with_valid_context(real_nut, monkeypatch):
+    # "사과 색깔은?" — DB에 '사과'가 실제로 존재하고 유효한 context_food(복숭아)도 있지만, 조사가
+    # '사과'가 아니라 '색깔'에 붙어 있으므로 화제 전환으로 오인해선 안 된다. 이 질문 자체는
+    # _is_food_followup_query()도 만족하지 않으므로(수량/영양소/그럼+먹는의도 신호가 전혀 없음)
+    # 기존 answer()로 안전하게 폴백해야 한다.
+    def _fail_food_lookup(*a, **kw):
+        raise AssertionError('사과 색깔은?: food_lookup_answer가 호출되면 안 된다(사과로도 복숭아로도 안 가야 함)')
+    monkeypatch.setattr(C, 'food_lookup_answer', _fail_food_lookup)
+    monkeypatch.setattr(C, 'find_food', lambda q: None)
+    monkeypatch.setattr(C, 'retrieve', lambda q, top_k=5: [])
+    monkeypatch.setattr(C, '_client', lambda: FakeClient(chat_content='(응답)'))
+    text, sources, ctx = C.answer_with_context('사과 색깔은?', context_food='복숭아, 백도, 생것')
+    assert ctx is None
+
+
+def test_answer_with_context_ambiguous_multi_food_question_does_not_guess(real_nut, monkeypatch):
+    def _fail_food_lookup(*a, **kw):
+        raise AssertionError('애매한 다중 재료 질문: food_lookup_answer가 호출되면 안 된다(임의로 고르면 안 됨)')
+    monkeypatch.setattr(C, 'food_lookup_answer', _fail_food_lookup)
+    monkeypatch.setattr(C, 'find_food', lambda q: None)
+    monkeypatch.setattr(C, 'retrieve', lambda q, top_k=5: [])
+    monkeypatch.setattr(C, '_client', lambda: FakeClient(chat_content='(응답)'))
+    text, sources, ctx = C.answer_with_context(
+        '사과는 바나나는 뭐가 나아?', context_food='복숭아, 백도, 생것')
+    assert ctx is None
+
+
+# ═══════ 18) find_food() 리팩터(_resolve_food_name 공유) 이후 관찰 가능 동작 불변 재확인 ═══════
+@pytest.mark.parametrize('question,expected', [
+    ('바나나 먹어도 되나요?', '바나나, 생것'),
+    ('말린 바나나 먹어도 되나요?', '바나나, 동결건조'),
+    ('데친 시금치 먹어도 되나요?', '시금치, 데친것'),
+    ('시금치 많이 먹어도 되나요?', '시금치, 생것'),
+])
+def test_find_food_behavior_unchanged_after_resolve_food_name_extraction(real_nut, question, expected):
+    assert C.find_food(question) == expected
+
+
+# ═══════ 19) Bug3 — "사과랑 바나나는?" 같은 multi-food 화제 전환 ambiguity (2026-08-14) ═══════
+
+@pytest.mark.parametrize('question', [
+    '사과랑 바나나는?',
+    '사과하고 바나나는?',
+    '오징어랑 두부는?',
+    '사과, 바나나는 어때?',
+])
+def test_answer_with_context_multi_food_switch_returns_clarify_deterministically(monkeypatch, question):
+    # 서로 다른 food가 2개 이상 동시에 topicalize/언급되면(조사가 그중 하나에만 우연히 붙어있어도)
+    # 절대 임의로 하나를 고르지 않고, LLM 호출 없이 고정 clarification으로 즉시 답해야 한다.
+    # sources=[]/context_food=None이어야 하고(기존 context도 끊음), retrieve/LLM은 호출되면 안 된다.
+    def _fail_food_lookup(*a, **kw):
+        raise AssertionError(f'{question!r}: food_lookup_answer가 호출되면 안 된다(임의 선택 금지)')
+    monkeypatch.setattr(C, 'food_lookup_answer', _fail_food_lookup)
+    monkeypatch.setattr(C, 'find_food', lambda q: None)
+
+    def _fail_retrieve(q, top_k=5):
+        raise AssertionError(f'{question!r}: multi-food clarification은 retrieve() 호출이 필요 없다')
+    monkeypatch.setattr(C, 'retrieve', _fail_retrieve)
+
+    def _fail_client():
+        raise AssertionError(f'{question!r}: multi-food clarification은 LLM 호출이 필요 없다(deterministic)')
+    monkeypatch.setattr(C, '_client', _fail_client)
+
+    text, sources, ctx = C.answer_with_context(question, context_food='복숭아, 백도, 생것')
+    assert text == C.MULTI_FOOD_CLARIFY_ANSWER
+    assert sources == []
+    assert ctx is None
+
+
+def test_answer_with_context_multi_food_with_redflag_stays_medical_safe(monkeypatch):
+    # "바나나랑 타이레놀은?" — red-flag(타이레놀)가 있으면 이번 multi-food ambiguity 처리가
+    # 끼어들 틈도 없이(기존 has_redflag_or_procedure 체크가 먼저 걸러냄) 기존 medical-OOS 안전
+    # 동작이 그대로 적용돼야 한다 — clarification으로 우회해 약물 질문을 가볍게 다루면 안 된다.
+    def _fail_food_lookup(*a, **kw):
+        raise AssertionError('food_lookup_answer가 호출되면 안 된다')
+    monkeypatch.setattr(C, 'food_lookup_answer', _fail_food_lookup)
+    monkeypatch.setattr(C, 'find_food', lambda q: None)
+    monkeypatch.setattr(C, 'retrieve', lambda q, top_k=5: (_ for _ in ()).throw(
+        AssertionError('red-flag 질문인데 retrieve()가 호출됨')))
+    text, sources, ctx = C.answer_with_context('바나나랑 타이레놀은?', context_food='복숭아, 백도, 생것')
+    assert text == C.OUT_OF_SCOPE_ANSWER
+    assert text != C.MULTI_FOOD_CLARIFY_ANSWER
+    assert sources == []
+    assert ctx is None
+
+
+@pytest.mark.parametrize('question,expected_short', [
+    ('그럼 사과는?', '사과'),
+    ('그러면 바나나는?', '바나나'),
+])
+def test_answer_with_context_single_food_switch_still_works_after_ambiguity_fix(
+        real_nut, monkeypatch, question, expected_short):
+    # 회귀 방지 — multi-food ambiguity 처리를 추가한 뒤에도 음식 1개짜리 화제 전환은 그대로
+    # 동작해야 한다(Bug2가 고쳤던 원래 케이스).
+    _mock_food_llm(monkeypatch)
+    text, sources, ctx = C.answer_with_context(
+        question, context_food='복숭아, 백도, 생것', weight=60, consumed=_CONSUMED_ZERO)
+    assert ctx is not None and ctx.startswith(expected_short)

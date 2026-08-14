@@ -349,13 +349,17 @@ def tts(req: TTSReq):
 def chat(req: ChatReq):
     """투석·콩팥병 영양 질문에 답하는 RAG 챗봇 (대한신장학회 자료 등 근거). OPENAI_API_KEY 필요.
     weight+consumed(오늘 이미 먹은 양, /generate 응답의 intake)를 같이 주면 '오늘 남은 예산' 감안한
-    개인화 답변을 준다 — 재료 질문에서만 적용되고, 일반 지식 질문에는 영향 없음."""
+    개인화 답변을 준다 — 재료 질문에서만 적용되고, 일반 지식 질문에는 영향 없음.
+    context_food(선택, 하위호환): 직전 응답의 context_food를 그대로 돌려보내면 "그럼 몇 조각?" 같은
+    한 턴짜리 음식 후속 질문도 대응한다 — 대화 이력을 서버가 들고 있는 게 아니라(stateless 유지),
+    answer_with_context()가 매 요청마다 새로 검증한다(FOOK_rag_chatbot.py 참고)."""
     import FOOK_rag_chatbot as C
     consumed = parse_consumed(req.consumed)   # 형식 틀리면 422 (조용히 0으로 처리 안 함, /generate와 동일 원칙)
     try:
-        answer, sources = C.answer(req.question, weight=req.weight, consumed=consumed,
-                                    meals_left=req.meals_left)
-        return {'answer': answer, 'sources': sources}
+        answer, sources, context_food = C.answer_with_context(
+            req.question, context_food=req.context_food, weight=req.weight, consumed=consumed,
+            meals_left=req.meals_left)
+        return {'answer': answer, 'sources': sources, 'context_food': context_food}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

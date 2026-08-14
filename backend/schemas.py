@@ -146,6 +146,12 @@ class ChatReq(BaseModel):
     consumed: Optional[dict] = None   # 오늘 이미 먹은 누적 (generate 응답의 intake와 동일 형식)
     meals_left: Optional[int] = None  # 오늘 남은 끼니 수(이번 것 포함). 있으면 하루 전체가 아니라
                                        # '다음 한 끼 몫'(남은예산÷남은끼니)으로 비교 — generate와 동일 개념
+    # 2026-08-14 추가 — "그럼 몇 조각?" 같은 한 턴짜리 음식 후속 질문 지원용. 대화 이력을 서버가
+    # 들고 있지 않으므로(stateless), 직전 응답에서 클라이언트가 그대로 돌려받은 canonical 재료명
+    # 문자열 하나만 "힌트"로 받는다 — 서버는 이 값을 절대 그대로 신뢰하지 않고 매번 영양DB에
+    # 실존하는 항목인지 검증한다(FOOK_rag_chatbot.answer_with_context() 참고). 안 보내도(기존
+    # 클라이언트) 기존 동작과 100% 동일 — 하위호환.
+    context_food: Optional[str] = None
 
 
 class SaveReq(BaseModel):

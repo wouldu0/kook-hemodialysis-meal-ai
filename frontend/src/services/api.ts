@@ -275,10 +275,20 @@ export function getMe(): Promise<{ user: any; profile: any }> {
 // 없어서(끼니별 기록은 있어도 "오늘 하루 합계"를 만들어주는 화면/엔드포인트가 없음), 근거 없는
 // 값을 지어내 보내느니 일반 질문 모드로만 동작시킨다(백엔드 chat()도 weight/consumed가 없으면
 // 자동으로 일반 답변 모드로 폴백한다).
-export function askChat(question: string): Promise<{ answer: string; sources: string[] }> {
+//
+// contextFood(선택, 2026-08-14 추가): 대화 이력 전체가 아니라 "직전 응답이 어떤 재료에 대한
+// 답이었는가" 딱 그 값 하나만 다음 요청에 그대로 되돌려 보낸다 — "그럼 몇 조각?" 같은 한 턴짜리
+// 음식 후속 질문 지원용(백엔드 FOOK_rag_chatbot.answer_with_context() 참고). null/undefined면
+// 요청 바디에 아예 안 넣는다(기존 요청 형태를 그대로 유지 — 하위호환).
+export function askChat(
+  question: string,
+  contextFood?: string | null
+): Promise<{ answer: string; sources: string[]; context_food?: string | null }> {
+  const body: Record<string, unknown> = { question };
+  if (contextFood) body.context_food = contextFood;
   return apiFetch("/chat", {
     method: "POST",
-    body: JSON.stringify({ question }),
+    body: JSON.stringify(body),
     timeoutMs: 45000,
   });
 }

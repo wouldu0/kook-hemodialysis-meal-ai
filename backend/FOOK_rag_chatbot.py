@@ -289,18 +289,13 @@ STATE_KW = {
 }
 
 
-def find_food(question):
-    """질문 텍스트에서 영양DB에 있는 재료명을 찾는다. 가장 긴(구체적인) 매칭 우선.
-    같은 짧은이름에 후보가 여럿이면: 질문에 재료 상태(말린/냉동/통조림 등)가 명시돼 있으면 그 상태의
-    항목을 우선하고, 없으면 '생것'을 우선(가공품보다 원재료 질문일 확률이 높음).
-    식이 질문 트리거 단어가 없으면 재료명이 우연히 섞여있어도 매칭하지 않는다."""
-    if not any(kw in question for kw in FOOD_QUESTION_KW):
-        return None
+def _resolve_food_name(short, question):
+    """짧은 이름(short, _food_index()의 idx 키)과 원본 질문 텍스트로 canonical DB 재료명을 고른다.
+    질문에 재료 상태(말린/냉동/통조림 등)가 명시돼 있으면 그 상태의 항목을 우선하고, 없으면
+    '생것'을 우선(가공품보다 원재료 질문일 확률이 높음), 둘 다 없으면 첫 후보.
+    find_food()와 _find_food_switch_candidate()가 이 매칭 코어를 공유한다(중복 구현 금지) —
+    find_food()는 이번 리팩터로 관찰 가능한 입출력이 전혀 바뀌지 않는다(기존 테스트로 확인됨)."""
     idx, ing_nut = _food_index()
-    candidates = [s for s in idx if s in question]
-    if not candidates:
-        return None
-    short = max(candidates, key=len)       # "무" 보다 "무말랭이"처럼 더 구체적인 것 우선
     names = idx[short]
 
     for q_kw, db_kws in STATE_KW.items():
@@ -314,6 +309,20 @@ def find_food(question):
         if '생것' in n:
             return n
     return names[0]
+
+
+def find_food(question):
+    """질문 텍스트에서 영양DB에 있는 재료명을 찾는다. 가장 긴(구체적인) 매칭 우선.
+    같은 짧은이름에 후보가 여럿이면 _resolve_food_name()이 상태/생것 우선 규칙으로 고른다.
+    식이 질문 트리거 단어가 없으면 재료명이 우연히 섞여있어도 매칭하지 않는다."""
+    if not any(kw in question for kw in FOOD_QUESTION_KW):
+        return None
+    idx, ing_nut = _food_index()
+    candidates = [s for s in idx if s in question]
+    if not candidates:
+        return None
+    short = max(candidates, key=len)       # "무" 보다 "무말랭이"처럼 더 구체적인 것 우선
+    return _resolve_food_name(short, question)
 
 
 CONSUMED_KEYS = ('E', 'protein', 'K', 'P', 'Na', 'Na_season')   # /generate 응답의 intake와 동일 키
@@ -348,6 +357,25 @@ def _remaining_budget(weight, consumed, meals_left=None):
         'K_consumed': c['K'], 'P_consumed': c['P'],
         'scope': '오늘 하루 전체 남은 예산',
     }
+
+
+# (2026-08-14 추가, food follow-up 지원 작업) "몇 조각/몇 개 먹을까?" 같은 질문 대응 —
+# FOOK_adjust_levers.load_all()의 재료 레코드는 100g당 값({'E','protein','P','K','Na','group'})만
+# 갖고 있고 조각당/개당 중량 필드가 아예 없다(이미 확인된 사실). 그래서 이런 질문에 LLM이 "2~3조각
+# 정도"처럼 존재하지 않는 조각 수를 만들어내지 않도록, 그럴 때만 프롬프트에 한 줄을 더 얹는다 —
+# 숫자·판정 계산 자체(facts/verdict)는 전혀 건드리지 않고 instruction 문구에만 추가한다.
+# (2026-08-14 Bug1 확장) '알'/'덩이'처럼 좀 더 넓은 낱개 표현도 커버 — 단, '알'을 맨 글자로 넣으면
+# '알레르기'/'알아요' 등 무관한 단어까지 걸리므로 기존 스타일('몇 개'/'몇개'처럼 구체적 구문)을
+# 그대로 따라 '몇 알'/'몇알'만 인정한다('몇 덩이'/'몇덩이'도 동일 이유).
+_PIECE_COUNT_HINT_TERMS = ('조각', '몇 개', '몇개', '쪽', '토막', '몇 알', '몇알', '몇 덩이', '몇덩이')
+
+
+def _asks_piece_count(question):
+    """질문이 '몇 조각/몇 개'처럼 영양DB에 없는 낱개·조각 단위를 묻는지 판정한다 — 라우팅에는
+    관여하지 않고, food_lookup_answer()가 개수를 지어내지 않도록 프롬프트에 안전 문구를 하나
+    추가할지 결정하는 데만 쓰인다."""
+    q = _scope_norm(question)
+    return any(t in q for t in _PIECE_COUNT_HINT_TERMS)
 
 
 def food_lookup_answer(question, food_name, weight=None, consumed=None, meals_left=None,
@@ -468,6 +496,31 @@ def food_lookup_answer(question, food_name, weight=None, consumed=None, meals_le
         "'남은 나트륨 예산' 수치를 새로 만들어내지 마라 — 그런 수치는 계산되지 않았다)."
         if na_serving is not None else ""
     )
+    # (2026-08-14 Bug1 재작업) 원래는 "몇 조각/몇 개" 질문에도 일반 step(3)(조리법 팁) 문구를
+    # 그대로 두고 별도 문장을 "추가"만 했다 — 그랬더니 LLM이 여전히 조리법 팁을 시도하다가 관련
+    # 자료가 없으면 "조리법과 관련된 주의사항은 제공된 자료에서 확인할 수 없습니다" 같은, 사용자가
+    # 묻지도 않은 주제에 대한 무관한 문장을 답변에 끼워넣는 사례가 실측으로 확인됐다(복숭아 "몇
+    # 조각" 질문). 그래서 지금은 조각/개수 질문일 때 step(3) 자체를 완전히 대체한다 — 조각/개수
+    # 안내가 step(3)의 유일한 내용이 되고, 질문하지 않은 주제에 대해 "자료에 없다"는 사실 자체를
+    # 문장으로 narrate하는 것도 명시적으로 금지한다.
+    if _asks_piece_count(question):
+        step3 = (
+            "(3) 낱개·조각 단위 안내 — 영양DB에는 조각·개당 중량 데이터가 없으니 조각 수·개수를 "
+            "새로 지어내지 마라. 대신 위 1회 섭취 기준량(g) 수치를 기준으로 안내하고, 조각 크기는 "
+            "써는 방식에 따라 달라져 정확한 개수로 환산하기 어렵다는 점만 짧게 언급해라. 질문에서 "
+            "묻지 않은 조리법·주의사항을 억지로 채우지 말고, 그런 자료가 '제공된 자료에서 확인할 "
+            "수 없다'는 식으로 없다는 사실 자체도 문장으로 언급하지 마라 — 필요 없으면 그냥 생략해라."
+        )
+        step3_personalized = step3
+    else:
+        step3 = (
+            "(3) 필요하면 조리법·주의사항 팁 한 줄만 ([관련 임상 자료 발췌] 중 이 재료와 실제로 "
+            "관련 있는 것만 — 무관하면 생략)."
+        )
+        step3_personalized = (
+            "(3) [관련 임상 자료 발췌]에 말린 과일·조리법 등 이 재료 섭취에 실제로 도움되는 주의사항이 "
+            "있으면 짧게 한 줄만 덧붙여라(무관하면 생략)."
+        )
     # (2026-08-14 wording hardening) "결론이 반복 설명 아래 묻힌다"는 피드백 대응: 결론을
     # 맨 앞으로 오게 하고, 개인화된 경우엔 LLM이 [최종 판정] 문구를 글자 그대로 다시 쓰지 않게
     # 한다 — 어차피 답변 끝에 코드가 "▶ 결론: {verdict}"를 안전장치로 못박아 붙이므로(아래,
@@ -477,8 +530,7 @@ def food_lookup_answer(question, food_name, weight=None, consumed=None, meals_le
     instruction = (
         "다음 순서로 짧게 답해라: (1) 첫 문장에 결론 — 이 재료가 저/중/고칼륨 중 무엇인지와 "
         "혈액투석 환자에게 지금 괜찮은지. (2) 1회 섭취 기준량 기준 핵심 수치(위 [영양DB 실측 자료]에 "
-        "있는 것만, 숫자를 새로 만들거나 바꾸지 마라). (3) 필요하면 조리법·주의사항 팁 한 줄만 "
-        "([관련 임상 자료 발췌] 중 이 재료와 실제로 관련 있는 것만 — 무관하면 생략). "
+        "있는 것만, 숫자를 새로 만들거나 바꾸지 마라). " + step3 + " "
         "전체 2~3문장을 넘기지 말고, 같은 말을 반복하지 마라." + na_instruction
     )
     if personalized:
@@ -486,8 +538,7 @@ def food_lookup_answer(question, food_name, weight=None, consumed=None, meals_le
             f"[최종 판정]은 이미 코드가 계산을 마친 확정된 결론이다 — 절대 네가 숫자를 다시 비교하거나 "
             f"판정을 뒤집지 마라. 답변 순서: (1) 결론과 같은 취지의 문장으로 시작해라(취지: "
             f"'{verdict}' — 반대로 말하면 안 된다). (2) 그 아래 [오늘 이 환자의 실제 섭취 현황] 숫자를 "
-            "근거로 왜 그런 결론인지 1~2문장으로 설명해라. (3) [관련 임상 자료 발췌]에 말린 과일·조리법 "
-            "등 이 재료 섭취에 실제로 도움되는 주의사항이 있으면 짧게 한 줄만 덧붙여라(무관하면 생략). "
+            "근거로 왜 그런 결론인지 1~2문장으로 설명해라. " + step3_personalized + " "
             "화면에는 네 답변 뒤에 최종 결론 문구가 자동으로 한 번 더 별도로 표시되니, 너는 그 문구를 "
             "글자 그대로 다시 쓰지 말고 자연스러운 설명으로 답을 마무리해라. 숫자를 임의로 바꾸거나 "
             "새로 지어내지 마라." + na_instruction
@@ -739,3 +790,221 @@ def answer(question, weight=None, consumed=None, meals_left=None, top_k=5, model
     text = resp.choices[0].message.content.strip()
     sources = sorted({h['source'] for h in context_hits})
     return text, sources
+
+
+# ═══════════════════════ Stateless 한 턴 음식 후속 질문 지원 (2026-08-14) ══════════════════
+# 배경(실제 운영 QA에서 발견된 버그): "복숭아 먹어도 되나?"(food_db 경로로 정상 응답) 다음에
+# "먹는다고 하면 몇조각 먹을까?"라고 물으면, /chat이 완전히 stateless라 이번 턴 텍스트 단독으로는
+# find_food()도 classify_scope()의 DOMAIN_TERMS도 걸리는 게 없어 OUT_OF_SCOPE로 잘못 빠진다.
+# ChatReq/ChatMessage 대화 이력 전체를 서버가 들고 있게 만들면(진짜 세션/메모리) 이 버그는
+# 고쳐지지만, 이번 작업의 하드 제약(서버 세션/메모리 금지, 대화 이력 전체 전송 금지)을 어기게
+# 된다. 그래서 "직전 응답이 실제로 어떤 재료에 대한 답이었는가" 딱 그 사실 하나만, 클라이언트가
+# 다음 요청에 그대로 되돌려 보내는 문자열(context_food)로 옮긴다 — 서버는 그 문자열을 아무 상태도
+# 갖지 않고 매 요청마다 새로 검증만 한다(진짜 stateless: 서버를 재시작해도, 다른 서버 인스턴스가
+# 요청을 받아도 동일하게 동작).
+#
+# answer()의 시그니처/2-tuple 반환 계약은 여기서 전혀 바꾸지 않는다(160개 기존 테스트가
+# `text, sources = C.answer(...)` 형태로 정확히 그 계약에 의존하므로) — 대신 이 얇은 함수를
+# 새로 얹어 server_FOOK.py의 /chat 핸들러가 answer() 대신 이를 호출하게 한다.
+def _valid_context_food(context_food):
+    """클라이언트가 이전 응답에서 그대로 되돌려 보낸 context_food 문자열을 그대로 신뢰하지
+    않는다 — find_food()가 이미 쓰는 것과 동일한 소스(FOOK_adjust_levers.load_all()의 ing_nut)를
+    통해 실제 영양DB에 존재하는 canonical 재료명인지 확인하고, 아니면(무효/조작/오래된 값이든)
+    컨텍스트가 아예 없었던 것처럼 취급한다 — 존재하지 않는 재료로 판정(verdict)을 만들어내지
+    않기 위한 안전장치."""
+    if not context_food:
+        return None
+    _, ing_nut = _food_index()
+    return context_food if context_food in ing_nut else None
+
+
+# 수량/1회분 신호 — 이것만으로도 "직전 재료에 대한 후속 질문"으로 충분히 판단한다.
+# 원 버그 리포트의 실제 문구("몇조각", 띄어쓰기 없음)를 놓치지 않도록 붙여쓴 변형도 함께 둔다
+# (한국어는 이런 복합명사 띄어쓰기가 구어체에서 흔히 흔들리므로 — DOMAIN_TERMS의 기존 스타일과
+# 동일하게 부분문자열 매칭, 형태소 분석기 새로 안 씀).
+FOOD_FOLLOWUP_QUANTITY_TERMS = (
+    '얼마나', '몇 g', '몇g', '몇 그램', '몇그램', '몇 조각', '몇조각', '몇 개', '몇개',
+    '몇 회', '몇회', '1회분', '한 번에', '한번에', '하루에',
+)
+# 영양소 이름 신호 — "칼륨은?"/"나트륨은?"처럼 이것만으로도 충분하다(작업 지시 Case C).
+# '인'(인 수치)은 1글자라 부분문자열로 넣으면 '원인'/'확인' 같은 무관한 단어에도 걸리므로
+# 별도 토큰 매칭(_has_phosphorus_token)으로 처리하고 여기엔 넣지 않는다.
+FOOD_FOLLOWUP_NUTRIENT_TERMS = ('칼륨', '나트륨')
+# 화제 연속 표현 + 먹는 의도 표현의 조합만으로도 충분하다(둘 다 있어야 함 — 아래 참고).
+FOOD_FOLLOWUP_CONTINUATION_TERMS = ('그럼', '그러면')
+FOOD_FOLLOWUP_EATING_INTENT_TERMS = ('먹', '섭취', '괜찮', '많이 먹으면', '조금은')
+
+
+def _has_phosphorus_token(q):
+    """'인'(인 수치) 하나만으로도 후속 질문 신호로 인정하되, 부분문자열로 넣으면 '원인'/'확인'
+    같은 완전히 무관한 단어까지 걸린다('인슐린'은 RED_FLAG_TERMS라 이 함수 호출 전에 이미
+    걸러지지만, '원인'/'확인'은 그 목록에 없다). 그래서 공백으로 나눈 토큰이 '인'으로 시작하는
+    경우만 인정한다 — 예: '인은?'/'인이 많나요' -> 매칭, '원인이 뭐야'/'확인해줘' -> 토큰이
+    '인'으로 시작하지 않으므로 매칭 안 됨(첫 글자가 각각 '원'/'확')."""
+    return any(tok.startswith('인') for tok in q.split(' ') if tok)
+
+
+def _is_food_followup_query(question):
+    """explicit food(find_food())도 없고 red-flag/투석시술 신호도 없는(호출부가 이미 그 순서로
+    걸러준 뒤에만 호출한다는 전제) 질문이, 직전 턴에서 다루던 음식(context_food)에 대한 자연스러운
+    한 턴짜리 후속 질문("그럼 몇 조각?", "칼륨은?", "그럼 얼마나 먹어?") 모양인지만 판정한다 —
+    "그 음식이 실제로 뭐였는지"는 전혀 모른다(그건 answer_with_context()가 context_food 검증으로
+    따로 판단). classify_scope()/_lexical_bonus()와 같은 스타일(정규식 기반 부분문자열/토큰 매칭,
+    형태소 분석기 없음)로 만들었고, 정규화는 새로 만들지 않고 기존 _scope_norm()을 그대로
+    재사용한다."""
+    q = _scope_norm(question)
+    if any(t in q for t in FOOD_FOLLOWUP_QUANTITY_TERMS):
+        return True
+    if any(t in q for t in FOOD_FOLLOWUP_NUTRIENT_TERMS):
+        return True
+    if _has_phosphorus_token(q):
+        return True
+    has_continuation = any(t in q for t in FOOD_FOLLOWUP_CONTINUATION_TERMS)
+    has_eating_intent = any(t in q for t in FOOD_FOLLOWUP_EATING_INTENT_TERMS)
+    return has_continuation and has_eating_intent
+
+
+# (2026-08-14 Bug2) "그럼 사과는?"처럼 동사가 아예 없는 화제 전환 후속 질문 — find_food()는
+# FOOD_QUESTION_KW(먹어도/먹을/섭취 등)가 문장에 하나도 없으면 절대 매칭하지 않으므로(의도된
+# 동작, find_food() 자체는 건드리지 않는다 — 전역적으로 완화하면 "사과 색깔은?"/"사과 사진
+# 보여줘"처럼 재료명이 우연히 섞인 완전히 무관한 질문까지 food 경로로 잘못 새기 때문에, 콜드
+# 스타트 턴까지 포함해 앱 전체에 위험). 대신 answer_with_context()에서만, 이미 유효한
+# context_food가 있을 때에 한해 "이번 질문이 다른 구체적 재료로 화제를 topicalize하고
+# 있는가"를 이 좁은 헬퍼로 별도 판정한다.
+_TOPIC_MARKER_SUFFIXES = ('는', '은')
+
+# (2026-08-14 Bug3) "사과랑 바나나는?"처럼 서로 다른 canonical food가 2개 이상 동시에 언급되면,
+# 아래 조사-인접 판정이 조사가 우연히 하나에만 붙어있다는 이유로("바나나는"은 붙어있지만 "사과"는
+# "랑"에 붙어있음) 그 하나만 조용히 골라버릴 수 있다 — deterministic하긴 해도 사용자가 실제로
+# 물은 두 음식 중 하나를 임의로 무시하고 답하는 셈이라 잘못된 동작이다. 그래서 조사-인접 판정보다
+# 먼저, 질문 전체에서 서로 다른(canonical 기준 dedupe) valid food가 몇 개 등장하는지 넓게 센다.
+_MULTI_FOOD_AMBIGUOUS = object()
+
+MULTI_FOOD_CLARIFY_ANSWER = (
+    "여러 음식이 함께 언급됐어요. 한 번에 한 음식씩 물어봐 주세요. 예: '사과는 어때?'"
+)
+
+
+def _distinct_canonical_foods(question):
+    """질문 안에 서로 다른 valid food DB 후보가 몇 개(그리고 무엇)인지 넓게 센다 — find_food()의
+    "후보가 질문 어디에든 있으면 매칭"과 동일하게 조사 인접 여부는 보지 않는 넓은 탐지다(조사
+    인접 여부는 _find_food_switch_candidate()의 별도 topicalization 판정에서만 쓴다). 같은
+    canonical 재료가 서로 다른 표현(예: '복숭아'/'백도')으로 두 번 잡혀도 canonical 이름 기준으로
+    dedupe하므로 중복 표현을 별개 음식 2개로 잘못 세지 않는다."""
+    q = _scope_norm(question)
+    idx, _ = _food_index()
+    broad = [s for s in idx if len(s) >= 2 and s in q]
+    # substring 관계인 후보(예: "사과"/"왕사과")는 find_food()와 동일하게 더 구체적인 쪽만 남긴다.
+    reduced = [s for s in broad if not any(s != other and s in other for other in broad)]
+    return {_resolve_food_name(s, question) for s in reduced}
+
+
+def _find_food_switch_candidate(question):
+    """explicit food(find_food())가 이미 실패한 뒤에만(answer_with_context()의 호출 순서 전제)
+    쓰인다. 먼저 _distinct_canonical_foods()로 서로 다른 valid food가 2개 이상 있는지 확인하고,
+    있으면 아래 조사-인접 판정을 아예 건너뛰고 _MULTI_FOOD_AMBIGUOUS를 반환한다 — 호출부가 이걸
+    보고 고정 clarification 문구로 답한다(둘 중 하나를 임의로 고르지 않음).
+    그 외의 경우, 재료명 후보가 질문에서 조사 '는'/'은'이 그 재료명 바로 뒤에 (사이에 다른 글자
+    없이) 붙어 topicalize되고 있을 때만 화제 전환으로 인정한다 — 예: "사과는"/"사과는?"/
+    "사과는 어때"는 인정하지만, "사과 색깔은?"처럼 조사가 재료명이 아니라 다른 명사(색깔)에 붙어
+    있으면 재료명이 문장의 화제가 아니므로 불인정한다. find_food()의 "후보가 질문 어디에든
+    있으면 매칭"이라는 훨씬 느슨한 규칙을 여기서 그대로 쓰지 않는 이유: 여긴 동사 신호가 아예
+    없는 상태에서 재료 하나를 골라야 해서 오탐 위험이 find_food()보다 훨씬 크다.
+    후보가 정확히 하나면(서로 substring 관계인 후보는 더 구체적인 쪽으로 좁힌 뒤) 그 canonical
+    이름을 _resolve_food_name()으로 반환한다. 0개면 None을 반환한다 — 이 경우 호출부가 기존
+    _is_food_followup_query() 기반 안전한 동작으로 폴백한다."""
+    if len(_distinct_canonical_foods(question)) >= 2:
+        return _MULTI_FOOD_AMBIGUOUS
+
+    q = _scope_norm(question)
+    idx, _ = _food_index()
+    matched = [s for s in idx
+               if len(s) >= 2 and any(f'{s}{suf}' in q for suf in _TOPIC_MARKER_SUFFIXES)]
+    if not matched:
+        return None
+    matched = sorted(set(matched), key=len, reverse=True)
+    # 서로 substring 관계인 후보(예: "사과"/"왕사과")는 더 구체적인(긴) 쪽만 남긴다 —
+    # find_food()의 "더 긴 쪽 우선" 철학과 동일. (2개 이상 서로 무관한 후보는 위에서 이미
+    # _MULTI_FOOD_AMBIGUOUS로 처리됐으므로 여기 도달했다면 reduced는 항상 0개 아니면 1개다.)
+    reduced = [s for s in matched if not any(s != other and s in other for other in matched)]
+    if len(reduced) != 1:
+        return None
+    return _resolve_food_name(reduced[0], question)
+
+
+def answer_with_context(question, context_food=None, weight=None, consumed=None, meals_left=None,
+                         top_k=5, model='gpt-4o-mini'):
+    """answer()를 대체하지 않고 그 위에 얇게 얹은 진입점 — server_FOOK.py의 /chat 핸들러가
+    이제 answer() 대신 이 함수를 호출한다. 대화 이력이나 서버 세션은 전혀 쓰지 않으며, 클라이언트가
+    직전 응답에서 그대로 돌려보낸 canonical 재료명 문자열(context_food) 하나만 "선택적 힌트"로
+    받는다 — context_food가 없거나 무효하면 기존 answer()와 100% 동일하게 동작한다.
+
+    라우팅 우선순위(각 단계는 이전 단계가 조건을 만족 못 했을 때만 평가):
+      1) 이번 질문에 명시적 재료명이 있으면(find_food()) 무조건 그게 이긴다 — context_food는
+         완전히 무시한다. "그럼 사과는 먹어도 돼?"처럼 화제가 바뀌는 질문이 아무 특별 처리 없이
+         자연스럽게 새 재료로 라우팅되는 이유이기도 하다.
+      2) red-flag(RED_FLAG_TERMS)나 투석 시술(DIALYSIS_PROCEDURE_TERMS) 신호가 이번 질문에
+         하나라도 있으면, context_food가 있어도(설령 유효해도) food follow-up 경로로 절대 가지
+         않는다 — "그럼 타이레놀은 얼마나 먹어?"가 남아있는 복숭아 컨텍스트 때문에 복숭아 답변이
+         되어버리는 일을 막는, 이 작업 전체에서 가장 중요한 안전 장치. classify_scope()가 이미
+         쓰는 두 목록을 그대로 재사용한다(복제하지 않음, backend/evaluation/fallback_classifier.py와
+         동일한 재사용 패턴).
+      3) context_food가 실제 영양DB에 존재하는 canonical 항목으로 검증되면(_valid_context_food()),
+         이번 질문이 _find_food_switch_candidate()로 "다른 구체적 재료로 화제를 전환"하는 모양인지
+         먼저 본다 — 새 재료가 있으면(예: "그럼 사과는?") 오래된 context_food보다 항상 이긴다.
+         서로 다른 food가 2개 이상 동시에 언급되면(예: "사과랑 바나나는?") 임의로 하나를 고르지
+         않고 MULTI_FOOD_CLARIFY_ANSWER로 즉시 답한다(sources=[], context_food=None — 기존
+         context도 함께 끊는다, LLM 호출 없음).
+         화제 전환이 아니면 _is_food_followup_query()가 "같은 재료에 대한 후속 질문" 모양인지
+         판단하고, 맞으면 기존 context_food를 그대로 쓴다. 어느 쪽이든 food_lookup_answer()를
+         그대로 호출한다 — 특정 재료 질문이 이미 쓰는 함수 그대로 재사용하는 것이라 K/P/Na
+         판정·▶ 결론 안전장치·나트륨 경고 등 기존 안전 로직이 전혀 재구현 없이 그대로 적용된다.
+      4) 그 외(설명 없음/후속 질문·화제전환 모양 아님/컨텍스트 무효)는 기존 answer()를 그대로
+         호출한다 — 기존 scope-gate/RAG_MIN_SCORE 게이트/재정렬/OOS 동작을 100% 그대로 보존한다.
+
+    반환: (답변, 출처, response_context_food) 3-tuple. response_context_food는 이번 턴이 실제로
+    특정 재료에 대한 답이었을 때만(1 또는 3 경로로 food_lookup_answer()에 도달했을 때만) 그
+    canonical 재료명이고, 그 외(끼니 계획/일반 RAG/OOS로 화제가 바뀐 턴)에는 항상 None이다 —
+    프론트가 다음 요청에 그대로 돌려보낼 값이므로, 화제가 음식이 아닌 쪽으로 바뀌는 순간 컨텍스트가
+    자동으로 사라지게(stale 컨텍스트가 다른 주제로 새지 않게) 만드는 핵심 장치."""
+    explicit_food = find_food(question)
+    if explicit_food:
+        result = food_lookup_answer(question, explicit_food, weight=weight, consumed=consumed,
+                                     meals_left=meals_left, model=model)
+        if result:
+            text, rag_sources = result
+            sources = sorted({'식약청 국가표준식품성분표 (FOOK 영양DB)', *rag_sources})
+            return text, sources, explicit_food
+        # food_lookup_answer()가 None을 반환하는 유일한 경우(칼륨 데이터 없는 재료) — answer()와
+        # 동일하게 RAG로 폴백한다(answer()의 find_food-then-fallback 동작을 그대로 재현).
+        text, sources = answer(question, weight=weight, consumed=consumed, meals_left=meals_left,
+                                top_k=top_k, model=model)
+        return text, sources, None
+
+    q_norm = _scope_norm(question)
+    has_redflag_or_procedure = (
+        any(t in q_norm for t in RED_FLAG_TERMS) or any(t in q_norm for t in DIALYSIS_PROCEDURE_TERMS)
+    )
+    if not has_redflag_or_procedure:
+        effective_food = _valid_context_food(context_food)
+        if effective_food:
+            # (Bug2) 화제 전환("그럼 사과는?")이 있으면 오래된 context_food보다 항상 이긴다 —
+            # 없으면(_find_food_switch_candidate()가 None) 기존 같은-재료 후속 질문 경로로 폴백.
+            switch_food = _find_food_switch_candidate(question)
+            # (Bug3) "사과랑 바나나는?"처럼 서로 다른 food가 2개 이상이면 임의로 하나를 고르지
+            # 않는다 — 기존 context_food도 함께 끊는다(다음에 뭘 이어받아야 할지 불명확하므로
+            # 안전한 쪽이 낫다). LLM 호출 없이 deterministic한 고정 안내로 즉시 답한다.
+            if switch_food is _MULTI_FOOD_AMBIGUOUS:
+                return MULTI_FOOD_CLARIFY_ANSWER, [], None
+            target_food = switch_food or (effective_food if _is_food_followup_query(question) else None)
+            if target_food:
+                result = food_lookup_answer(question, target_food, weight=weight, consumed=consumed,
+                                             meals_left=meals_left, model=model)
+                if result:
+                    text, rag_sources = result
+                    sources = sorted({'식약청 국가표준식품성분표 (FOOK 영양DB)', *rag_sources})
+                    return text, sources, target_food
+
+    text, sources = answer(question, weight=weight, consumed=consumed, meals_left=meals_left,
+                            top_k=top_k, model=model)
+    return text, sources, None
