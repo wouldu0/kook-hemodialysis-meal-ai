@@ -95,12 +95,19 @@ export const RESOURCE_KEY_MAP: Record<string, string> = {
 };
 
 // 저장: 로그인 상태면 서버(DB)에도 저장한다. 서버 실패해도 로컬엔 남겨서 화면은 끊기지 않는다.
+//
+// item.id는 호출부(FinalMealPage 등)가 `meal-${Date.now()}`처럼 임시로 만든 클라이언트 id다.
+// 서버 저장이 성공하면 서버가 진짜 id(UUID, POST /me/{resource} 응답의 `id`)를 돌려주는데,
+// 이걸 무시하고 클라이언트 id를 그대로 로컬에 남겨두면 이후 loadEverywhere()의 서버 목록과
+// 이 로컬 항목의 id가 영영 어긋나서, deleteEverywhere()가 로컬에서 엉뚱한(또는 아무) 항목도
+// 못 지우고 서버에서 지운 항목이 다음 조회 때 로컬 잔재로 되살아나는 문제가 생긴다. 그래서
+// 성공 시 로컬에 방금 저장해둔 그 항목의 id를 서버 id로 바로 맞춰 놓는다.
 export async function saveEverywhere(key: string, item: SavedItem) {
   addSaved(key, item);
   const resource = RESOURCE_KEY_MAP[key];
   if (!resource || !authToken()) return;
   try {
-    await apiFetch(`/me/${resource}`, {
+    const res = await apiFetch(`/me/${resource}`, {
       method: "POST",
       body: JSON.stringify({
         title: item.title,
@@ -116,8 +123,16 @@ export async function saveEverywhere(key: string, item: SavedItem) {
         },
       }),
     });
+    if (res?.id && res.id !== item.id) {
+      const list = storage.get<SavedItem[]>(key, []);
+      storage.set(
+        key,
+        list.map((x) => (x.id === item.id ? { ...x, id: res.id } : x)),
+      );
+    }
   } catch {
-    // 서버 저장 실패는 조용히 무시 — 로컬엔 이미 저장됐으니 화면은 정상 동작
+    // 서버 저장 실패는 조용히 무시 — 로컬엔 이미 클라이언트 id로 저장돼 있으니(local-only
+    // fallback) 화면은 정상 동작. id 동기화는 다음 성공한 저장에서나 일어난다.
   }
 }
 
@@ -142,11 +157,19 @@ export async function loadEverywhere(key: string): Promise<SavedItem[]> {
     }));
     // 서버 저장이 실패했던 항목은 로컬에만 남아 있다. 서버 목록으로 덮어쓰면
     // 방금 저장한 게 사라져 보이므로, 서버에 없는 로컬 항목은 함께 보여준다.
+    //
+    // saveEverywhere()가 성공 시 로컬 id를 서버 id로 맞춰두므로, 정상 동기화된 항목은
+    // id만 비교해도 정확히 걸러진다(주 판별 기준). title|subtitle|createdAt 방식은
+    // 이 id 동기화가 생기기 전에 저장된 예전 로컬 항목이나 서버 저장이 실패해 클라이언트
+    // id를 그대로 갖고 있는 항목까지 놓치지 않기 위한 보조 판별로 남겨둔다.
+    const serverIds = new Set(items.map((x) => x.id));
     const seen = new Set(
       items.map((x) => `${x.title}|${x.subtitle}|${x.createdAt?.slice(0, 16)}`),
     );
     const extras = local.filter(
-      (x) => !seen.has(`${x.title}|${x.subtitle}|${x.createdAt?.slice(0, 16)}`),
+      (x) =>
+        !serverIds.has(x.id) &&
+        !seen.has(`${x.title}|${x.subtitle}|${x.createdAt?.slice(0, 16)}`),
     );
     return [...extras, ...items].sort((a, b) =>
       String(b.createdAt).localeCompare(String(a.createdAt)),

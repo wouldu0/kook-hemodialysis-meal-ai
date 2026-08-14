@@ -21,7 +21,7 @@ server_FOOK.py — KOOK 백엔드 API (FastAPI)
   - /recipe, /tts는 OPENAI_API_KEY가 있어야 동작합니다. 없으면 각각 error 필드 응답 / 400.
 """
 from __future__ import annotations
-import os, uuid
+import math, os, uuid
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Header, Depends
@@ -84,9 +84,16 @@ def parse_consumed(raw):
         raise HTTPException(422, f'consumed에 {missing} 키가 없습니다.{hint} '
                                  f'필요한 키: {list(CONSUMED_KEYS)}')
     try:
-        return {k: float(raw[k] or 0) for k in CONSUMED_KEYS}
+        values = {k: float(raw[k] or 0) for k in CONSUMED_KEYS}
     except (TypeError, ValueError):
         raise HTTPException(422, 'consumed 값은 모두 숫자여야 합니다.')
+    # 음수·NaN·무한대는 실제 "먹은 양"일 수 없다 — 조용히 통과시키면 남은 예산 계산이
+    # 깨진다(예: 음수면 남은 예산이 오히려 늘어남). 0은 "아직 안 먹음"이라는 정당한 값이라
+    # 계속 허용한다. /generate·/chat 둘 다 이 함수 하나만 거치므로 검증은 여기 한 곳에서만 하면 된다.
+    invalid = [k for k, v in values.items() if v < 0 or math.isnan(v) or math.isinf(v)]
+    if invalid:
+        raise HTTPException(422, f'consumed 값은 0 이상의 유한한 숫자여야 합니다: {invalid}')
+    return values
 
 
 def _parse_birthdate(raw: str):
@@ -230,7 +237,12 @@ def update_profile(req: ProfileReq, user=Depends(bearer)):
 # 이 서비스는 이메일·문자 발송 수단이 없어서 "재설정 링크를 보낸다" 방식을 쓸 수 없다.
 # 대신 가입 시 프로필에 입력한 이름 + 생년월일이 모두 일치할 때만 알려주거나 재설정한다.
 # 프로필을 아직 입력하지 않아 생년월일이 없는 계정은 확인 근거가 없으므로 찾을 수 없다.
-@app.post('/auth/find-id')
+#
+# 포트폴리오 데모 범위의 본인 확인 수단이다 — 이름+생년월일은 추측·수집 가능한 정보라
+# 실제 서비스에서 쓰는 프로덕션급 신원 확인(이메일/SMS OTP, 신분증 인증 등)이 아니다.
+# 무차별 대입(총 유효 조합 수가 크지 않음)을 늦추는 목적으로 rate_limit만 걸어둔다 —
+# 이 이상의 방어(OTP 등)는 이메일/문자 발송 인프라가 없어 이번 범위에서는 하지 않는다.
+@app.post('/auth/find-id', dependencies=[Depends(rate_limit('find-id', 5, 900))])
 def find_id(req: FindIdReq):
     birth = _parse_birthdate(req.birthdate)
     with db() as conn:
@@ -240,6 +252,8 @@ def find_id(req: FindIdReq):
             where btrim(lower(u.display_name))=:n and p.birthdate=:b and u.is_active=true
             order by u.created_at'''),
             {'n': req.name.strip().lower(), 'b': birth}).mappings().all()
+    # 이름/생년월일이 아예 안 맞는 경우와 "계정은 있는데 정보가 틀린" 경우를 구분하지 않고
+    # 항상 같은 404 메시지를 준다 — 계정 존재 여부 자체를 노출하지 않기 위함(계정 열거 방지).
     if not rows:
         raise HTTPException(404, '입력하신 이름과 생년월일로 가입된 아이디를 찾지 못했습니다.')
     return {'usernames': [r['email'] for r in rows],
@@ -248,6 +262,9 @@ def find_id(req: FindIdReq):
 
 @app.post('/auth/reset-password', dependencies=[Depends(rate_limit('reset-password', 5, 900))])
 def reset_password(req: ResetPasswordReq):
+    # find_id()와 동일하게: 계정 미존재/이름 불일치/생년월일 불일치를 구분하지 않고 하나의
+    # 쿼리·하나의 404 메시지로 합친다(계정 열거 방지). 이 엔드포인트도 위 "포트폴리오 데모
+    # 범위" 주석과 같은 한계를 가진다.
     birth = _parse_birthdate(req.birthdate)
     username = req.username.strip()
     with db() as conn:

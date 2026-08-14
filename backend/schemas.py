@@ -142,9 +142,14 @@ class TTSReq(BaseModel):
 
 class ChatReq(BaseModel):
     question: str
-    weight: Optional[int] = None      # 체중(kg). consumed와 같이 주면 '오늘 남은 예산' 감안한 답변
-    consumed: Optional[dict] = None   # 오늘 이미 먹은 누적 (generate 응답의 intake와 동일 형식)
-    meals_left: Optional[int] = None  # 오늘 남은 끼니 수(이번 것 포함). 있으면 하루 전체가 아니라
+    # GenReq/ProfileReq.weight와 같은 범위(20~300kg)를 그대로 재사용한다 — 감사에서 지적된
+    # 항목: 예전엔 ChatReq만 범위 하한/상한이 없어서 0·음수·비현실적으로 큰 값도 그대로
+    # food_lookup_answer()의 남은 예산 계산에 흘러들어갈 수 있었다(비개인화 질문에는 영향 없음,
+    # weight+consumed가 둘 다 있을 때만 쓰이는 값이라 기존 정상 요청의 허용 범위는 그대로다).
+    weight: Optional[int] = Field(default=None, ge=20, le=300)      # 체중(kg). consumed와 같이 주면 '오늘 남은 예산' 감안한 답변
+    consumed: Optional[dict] = None   # 오늘 이미 먹은 누적 (generate 응답의 intake와 동일 형식) — 숫자/음수/NaN 검증은 server_FOOK.parse_consumed()에서 (generate와 공유)
+    # 오늘 남은 끼니 수(이번 것 포함) — generate/day_result와 동일하게 1~3끼로 제한한다.
+    meals_left: Optional[int] = Field(default=None, ge=1, le=3)  # 있으면 하루 전체가 아니라
                                        # '다음 한 끼 몫'(남은예산÷남은끼니)으로 비교 — generate와 동일 개념
     # 2026-08-14 추가 — "그럼 몇 조각?" 같은 한 턴짜리 음식 후속 질문 지원용. 대화 이력을 서버가
     # 들고 있지 않으므로(stateless), 직전 응답에서 클라이언트가 그대로 돌려받은 canonical 재료명
