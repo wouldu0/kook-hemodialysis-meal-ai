@@ -410,60 +410,25 @@ LLM은 설명만 담당하도록 분리해, 생성형 모델이 계산 결과를
 ┌─────────────┐  ┌──────────────────┐
 │ Neon        │  │ 음식·영양 데이터    │
 │ Postgres    │  │ CSV · XLSX · JSON │
-│ (회원 7테이블)│  │ (메뉴 992종)      │
+│ (회원·식단 등)│  │ (메뉴 992종)      │
 └─────────────┘  └──────────────────┘
 ```
-
-**DB 테이블 7개** — `app_users` · `user_profiles` · `auth_sessions` · `meal_records` · `favorites` · `user_documents` · `shopping_cart_items`
 
 ---
 
 ## 🛠️ 기술 스택
 
-> 비전공자도 이해할 수 있도록, 각 기술이 **어떤 역할**을 하는지 함께 적었습니다.
+> 비전공자도 이해할 수 있도록, 각 기술을 **KOOK에서 어떻게 썼는지** 위주로 적었습니다.
 
-### AI · 생성 엔진
-
-| 분류 | 기술 | 한 줄 설명 |
-|:---:|:---:|:---|
-| **언어** | Python 3.9 | AI 개발 표준 언어 |
-| **딥러닝** | TensorFlow-CPU 2.20 · tf-keras | 식단 생성 모델 구동 |
-| **생성 모델** | Seq2Seq (GRU Encoder–Decoder) | 메뉴를 순서대로 만들어내는 구조 |
-| **어텐션** | Bahdanau Attention | 앞서 고른 메뉴를 참고해 다음 메뉴 선택 |
-| **강화학습** | REINFORCE (정책 경사) | 영양 기준을 지키는 조합에 보상을 줘 학습 |
-| **재료 대체** | KLUE-BERT 임베딩 + KNN | 저칼륨·저인 대체 재료 추천 |
-| **수치 연산** | NumPy · pandas · SciPy | 영양소 계산 및 데이터 처리 |
-| **RAG** | OpenAI Embeddings (text-embedding-3-small) | 영양 상담 챗봇의 근거 자료 검색 |
-| **LLM** | OpenAI API (gpt-4o-mini) | 재조정된 재료에 맞춰 조리법 재작성 · 챗봇 응답 생성 |
-
-### 백엔드
-
-| 분류 | 기술 | 한 줄 설명 |
-|:---:|:---:|:---|
-| **API 서버** | FastAPI 0.116 · uvicorn 0.35 | 프론트와 통신하는 REST API |
-| **검증** | Pydantic 2.11 | 요청 데이터 형식 자동 검증 |
-| **DB 연결** | SQLAlchemy 2.0 · psycopg 3.2 | Postgres 접속 및 쿼리 |
-| **DB** | Neon Postgres (Serverless) | 회원·식단기록·즐겨찾기 저장 |
-| **인증** | 세션 토큰 + 비밀번호 해싱 | 로그인 상태 유지 및 비밀번호 보호 |
-
-### 프론트엔드
-
-| 분류 | 기술 | 한 줄 설명 |
-|:---:|:---:|:---|
-| **UI** | React 19.1 · TypeScript 5.8 | 화면 구성 및 타입 안전성 |
-| **빌드** | Vite 7.1 | 개발 서버 및 프로덕션 빌드 |
-| **라우팅** | react-router-dom 7.8 | 화면 전환 |
-| **PDF** | jsPDF 4.2 · html2canvas 1.4 | 브라우저에서 A4 1장 PDF 생성 |
-| **음성** | Web Speech API (+ OpenAI TTS 대체) | 조리 과정 음성 안내 |
-| **반응형** | CSS Container Query · clamp() | 모든 휴대폰 화면 크기에 유동 대응 |
-
-### 배포
-
-| 분류 | 기술 | 한 줄 설명 |
-|:---:|:---:|:---|
-| **프론트** | Vercel | GitHub push 시 자동 빌드·배포 |
-| **백엔드** | Render (Docker) | Dockerfile 기반 컨테이너 배포 |
-| **DB** | Neon | 서버리스 Postgres |
+| 영역 | 핵심 기술 | 활용 |
+|:---|:---|:---|
+| **AI / ML** | TensorFlow · Seq2Seq(GRU) · Bahdanau Attention · REINFORCE | 식단 생성 및 영양 기준 기반 생성 보정 |
+| **재료 대체** | KLUE-BERT · KNN | 저칼륨·저인 대체 재료 탐색 |
+| **LLM / RAG** | OpenAI API · Embeddings | 레시피 재구성 · 근거 기반 영양 상담 |
+| **Backend** | FastAPI · Pydantic · SQLAlchemy | AI API · 요청 검증 · DB 연동 |
+| **Frontend** | React · TypeScript · Vite | 웹 서비스 UI |
+| **Database** | Neon PostgreSQL | 회원·식단 기록 데이터 저장 |
+| **Deploy** | Vercel · Render · Docker | 프론트·백엔드 배포 |
 
 ---
 
