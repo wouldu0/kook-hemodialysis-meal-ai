@@ -1,6 +1,7 @@
 // 백엔드 통신 + 로컬/서버 동기화 저장소. App.tsx의 화면 컴포넌트들은 이 모듈의
 // 함수만 통해서 서버와 이야기한다(직접 fetch를 새로 쓰지 않는다).
-import type { ApiResult, DayPlanResult, SavedItem, SavedUser } from "../types";
+import type { ApiResult, DayPlanResult, MealTime, SavedItem, SavedUser } from "../types";
+import { todayISO } from "../utils/date";
 
 export const storage = {
   get<T>(key: string, fallback: T): T {
@@ -191,6 +192,100 @@ export async function deleteEverywhere(key: string, id: string) {
   } catch {
     // 무시
   }
+}
+
+// ────────────────────────── 오늘 기록한 식사 → /generate 컨텍스트 ──────────────────────────
+// "기록하기"(FinalMealPage)로 저장된 fook:history(=meal-records)에는 이미 raw_menus/intake가
+// 함께 들어있는데(FinalMealPage.tsx 참고), /generate는 지금까지 이걸 전혀 안 보고 매번
+// meals_left: 3(오늘 아무것도 안 먹은 것처럼)으로만 호출해왔다. 여기서는 그 이력 배열 하나를
+// 받아 순수하게 {consumed, used_today, mealsLeft, usedSlotCount}로 접어주기만 한다 — fetch나
+// localStorage 접근이 전혀 없는 순수 함수라 단위 테스트가 쉽다(호출부는 GeneratingPage.tsx).
+
+// server_FOOK.CONSUMED_KEYS / parse_consumed()와 반드시 같은 키 목록이어야 한다 — 다르면
+// consumed를 만들어도 백엔드가 422로 거부한다.
+const CONSUMED_KEYS = ["E", "protein", "K", "P", "Na", "Na_season"] as const;
+
+const STANDARD_MEAL_TIMES: MealTime[] = ["아침", "점심", "저녁"];
+
+function isValidIntake(
+  intake: SavedItem["intake"],
+): intake is NonNullable<SavedItem["intake"]> {
+  if (!intake) return false;
+  return CONSUMED_KEYS.every((k) => {
+    const v = (intake as Record<string, unknown>)[k];
+    return typeof v === "number" && Number.isFinite(v) && v >= 0;
+  });
+}
+
+export type TodayMealContext = {
+  // 유효한 intake를 가진 오늘 기록이 하나도 없으면 아예 안 넣는다(fail-open — history가
+  // 없는 것과 동일하게 동작).
+  consumed?: NonNullable<SavedItem["intake"]>;
+  used_today?: string[];
+  // 이번 요청(이번 끼 포함) 기준 남은 끼니 수. 항상 1~3.
+  mealsLeft: number;
+  // 오늘 "유효한 intake를 가진" 최신 끼니 슬롯 수(아침/점심/저녁 중 최대 3) — consumed
+  // 합산에 실제로 기여한 슬롯 수와 정확히 같다. UI 힌트("N끼를 반영해...")와 mealsLeft
+  // 계산의 근거가 되는 값이다. intake가 없거나 구버전이라 consumed에서 제외된 슬롯은
+  // 여기에도 포함하지 않는다 — "기록은 있지만 영양 데이터가 없는" 끼니 때문에 meals_left가
+  // 부당하게 줄어들면 안 되기 때문(2026-08 수정 — 이전에는 intake 유효성과 무관하게
+  // 슬롯 존재 여부만 셌었다).
+  usedSlotCount: number;
+};
+
+// today의 fook:history 레코드 배열 → /generate에 실어보낼 컨텍스트.
+// - 오늘(todayISO()) 날짜가 아닌 기록은 전부 제외.
+// - 같은 mealTime(아침/점심/저녁) 안에서는 createdAt이 가장 늦은 기록 하나만 남긴다(중복 방지).
+//   mealTime이 없거나 아침/점심/저녁이 아닌 기록은 이 집계에서 제외한다(기록 자체는 그대로 둠).
+//   이 "최신 1건" 선택은 그 기록의 intake 유효성과 무관하다 — 같은 슬롯에 예전의 유효한
+//   기록이 있어도, 최신 기록이 intake가 없으면 그 과거 기록으로 임의로 대체(fallback)하지
+//   않는다(최신 기록이 실제로 그 끼니를 대표한다고 보기 때문).
+// - consumed: 선택된 기록 중 intake의 6개 키(E/protein/K/P/Na/Na_season)가 전부 있고, 전부
+//   유한하고 0 이상인 숫자인 기록만 합산한다. 하나도 없으면 consumed를 아예 안 넣는다.
+// - used_today: 선택된 기록들의 raw_menus를 합쳐 중복 제거(빈 값 제외). 비어 있으면 안 넣는다.
+// - mealsLeft: max(1, 3 - usedSlotCount). usedSlotCount는 선택된 기록 중 intake가 유효한
+//   것만 센다(=consumed 합산에 실제로 기여한 슬롯 수) — intake 없는/구버전 기록만 있는
+//   슬롯은 "아직 기록 안 한 것"과 동일하게 취급한다. 예: 오늘 아침 기록이 있어도 intake가
+//   없으면 그 아침은 meals_left 계산에서도, consumed 합산에서도 빠진다.
+export function buildTodayMealContext(history: SavedItem[]): TodayMealContext {
+  const today = todayISO();
+  const todays = (history || []).filter(
+    (item) => item && item.mealDate === today,
+  );
+
+  const latestBySlot = new Map<MealTime, SavedItem>();
+  for (const item of todays) {
+    const slot = item.mealTime;
+    if (!slot || !STANDARD_MEAL_TIMES.includes(slot)) continue;
+    const existing = latestBySlot.get(slot);
+    if (!existing || String(item.createdAt) > String(existing.createdAt)) {
+      latestBySlot.set(slot, item);
+    }
+  }
+  const selected = Array.from(latestBySlot.values());
+
+  let consumed: NonNullable<SavedItem["intake"]> | undefined;
+  let usedSlotCount = 0;
+  for (const item of selected) {
+    if (!isValidIntake(item.intake)) continue;
+    usedSlotCount += 1;
+    if (!consumed) consumed = { E: 0, protein: 0, K: 0, P: 0, Na: 0, Na_season: 0 };
+    for (const k of CONSUMED_KEYS) consumed[k] += item.intake![k];
+  }
+
+  const usedMenus = new Set<string>();
+  for (const item of selected) {
+    for (const m of item.raw_menus || []) {
+      if (m) usedMenus.add(m);
+    }
+  }
+
+  return {
+    consumed,
+    used_today: usedMenus.size ? Array.from(usedMenus) : undefined,
+    mealsLeft: Math.max(1, 3 - usedSlotCount),
+    usedSlotCount,
+  };
 }
 
 // ────────────────────────── 엔드포인트별 함수 ──────────────────────────

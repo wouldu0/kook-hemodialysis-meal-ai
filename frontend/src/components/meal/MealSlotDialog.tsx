@@ -17,9 +17,11 @@ export function MealSlotDialog({
         <span className="modal-mark">🍽</span>
         <h2>언제 먹은 식단인가요?</h2>
         <p>
-          날짜와 끼니를 고르면
+          실제로 먹은 날짜와 끼니를 기록하면
           <br />
-          식단 관리의 해당 섹션에 기록돼요.
+          식단 관리에 저장되고, 오늘 기록은 다음 식단
+          <br />
+          추천의 남은 영양 기준에 반영돼요.
         </p>
         <label className="slot-date">
           <span>날짜</span>

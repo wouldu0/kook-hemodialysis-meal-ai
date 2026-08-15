@@ -109,6 +109,9 @@ class GenReq(HeightSexMixin):
     weight: int = Field(default=60, ge=20, le=300)
     consumed: Optional[dict] = None
     meals_left: int = 3
+    # 오늘 이미 나온 메뉴 목록(하루 중복 방지). day_result가 끼니마다 누적해서 넘기는 것과
+    # 같은 개념을, 프론트가 오늘 실제로 기록한 식사 이력(raw_menus)으로부터 만들어 보낸다.
+    used_today: Optional[list[str]] = None
 
 
 class DayReq(HeightSexMixin):

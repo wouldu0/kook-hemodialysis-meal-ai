@@ -149,6 +149,37 @@ def test_day_req_default_weight_is_valid():
     assert GenReq().weight == 60
 
 
+# ---------------- GenReq.used_today (오늘 이미 기록한 메뉴 → 하루 중복 방지) ----------------
+# day_result()는 끼니마다 used_today를 누적해서 make_meal()에 넘겨왔지만(하루 생성),
+# /generate 한 끼 경로에는 프론트가 "오늘 실제로 기록한 식사"의 raw_menus를 넘길 방법이
+# 없었다. GenReq에 used_today를 추가해 이 경로를 연결한다 — 필드가 없어도(하위호환) 기존
+# 요청은 그대로 통과해야 한다.
+
+def test_gen_req_accepts_used_today():
+    req = GenReq(used_today=['된장찌개', '현미밥'])
+    assert req.used_today == ['된장찌개', '현미밥']
+
+
+def test_gen_req_used_today_defaults_to_none():
+    # 필드를 아예 안 보내는 기존 클라이언트/테스트 요청도 계속 통과해야 한다(하위호환).
+    req = GenReq()
+    assert req.used_today is None
+
+
+def test_gen_req_used_today_none_explicit_still_fine():
+    req = GenReq(used_today=None)
+    assert req.used_today is None
+
+
+def test_gen_req_used_today_does_not_affect_consumed_validation():
+    # used_today와 consumed는 서로 독립된 필드 — 하나를 추가했다고 다른 하나의 기존
+    # 검증(체중 범위 등)이 깨지면 안 된다.
+    req = GenReq(weight=55, consumed={'E': 100}, used_today=['김치찌개'])
+    assert req.weight == 55
+    assert req.consumed == {'E': 100}
+    assert req.used_today == ['김치찌개']
+
+
 # ---------------- DayReq.menus/ingredients 길이 (하루 세 끼 고정) ----------------
 # 감사에서 지적된 항목: day_result()가 menus[0..2]를 바로 인덱싱해서, 길이 1·2인 menus를
 # 보내면 IndexError -> 500이 났다(제대로 된 4xx가 아니었음). 길이 3만 허용하고, None과 빈

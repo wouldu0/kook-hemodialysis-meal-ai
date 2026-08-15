@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shell } from "../../components/layout/Shell";
 import { useApp } from "../../hooks/useApp";
-import { generateMeal } from "../../services/api";
+import {
+  buildTodayMealContext,
+  generateMeal,
+  loadEverywhere,
+} from "../../services/api";
 import type { Plan } from "../../types";
 
 export function GeneratingPage() {
@@ -11,6 +15,8 @@ export function GeneratingPage() {
     useApp();
   const [s, setS] = useState(0);
   const [error, setError] = useState("");
+  // 오늘 기록한 식사가 이번 요청에 실제로 반영됐을 때만 보여줄 한 줄 힌트.
+  const [todayHint, setTodayHint] = useState("");
   const msgs = [
     "메뉴와 재료 데이터를 불러오고 있어요",
     "회원님의 키·몸무게 기준으로 영양 목표를 계산하고 있어요",
@@ -38,6 +44,23 @@ export function GeneratingPage() {
       if (searchMode === "menu" && query.trim()) body.menu = query.trim();
       if (searchMode === "ingredient" && query.trim())
         body.ingredient = query.trim();
+      // 오늘 이미 "기록하기"로 저장해둔 식사가 있으면 그 섭취량/메뉴를 이번 요청에 반영한다.
+      // 이력 조회·집계가 뭐가 됐든 실패하면(네트워크, 파싱 등) 조용히 기존 동작(meals_left: 3,
+      // consumed/used_today 없음)으로 폴백한다 — 절대 생성 자체를 막으면 안 된다.
+      try {
+        const history = await loadEverywhere("fook:history");
+        const ctx = buildTodayMealContext(history);
+        if (ctx.consumed) body.consumed = ctx.consumed;
+        if (ctx.used_today) body.used_today = ctx.used_today;
+        body.meals_left = ctx.mealsLeft;
+        if (ctx.consumed || ctx.used_today) {
+          setTodayHint(
+            `오늘 기록한 식사 ${ctx.usedSlotCount}끼를 반영해 남은 영양 기준으로 추천하고 있어요.`,
+          );
+        }
+      } catch (histErr) {
+        console.warn("오늘 식사 기록을 불러오지 못해 기본값으로 진행합니다.", histErr);
+      }
       try {
         const d = await generateMeal(body);
         if (!live) return;
@@ -95,7 +118,8 @@ export function GeneratingPage() {
         <div className="progress">
           <i style={{ width: `${((s + 1) / msgs.length) * 100}%` }} />
         </div>
-        {!error && s >= 2 && (
+        {!error && todayHint && <p className="loading-hint">{todayHint}</p>}
+        {!error && !todayHint && s >= 2 && (
           <p className="loading-hint">
             영양 기준에 딱 맞는 조합을 찾는 중이라 조금 더 걸릴 수 있어요.
           </p>

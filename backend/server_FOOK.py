@@ -321,13 +321,16 @@ def menus_by_ingredient(q: str):
 # ────────────────────────── 식단 생성 (진짜 AI 엔진) ──────────────────────────
 @app.post('/generate')
 def generate(req: GenReq):
-    """한 끼 생성. consumed(오늘 먹은 누적)를 주면 남은 예산으로 이 끼의 목표를 잡는다."""
+    """한 끼 생성. consumed(오늘 먹은 누적)를 주면 남은 예산으로 이 끼의 목표를 잡는다.
+    used_today(오늘 이미 나온 메뉴)를 주면 day_result와 동일하게 하루 중복을 피한다."""
     consumed = parse_consumed(req.consumed)
+    used_today = set(req.used_today) if req.used_today else None
     return core.meal_result(menu=(req.menu or None),
                             ingredient=(req.ingredient or None),
                             weight=req.weight, height=req.height, sex=req.sex,
                             consumed=consumed,
-                            meals_left=max(1, min(3, req.meals_left)))
+                            meals_left=max(1, min(3, req.meals_left)),
+                            used_today=used_today)
 
 
 @app.post('/generate_day')
