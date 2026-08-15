@@ -365,34 +365,34 @@ LLM은 설명만 담당하도록 분리해, 생성형 모델이 계산 결과를
 
 ```
 ┌─────────────────────────────┐
-│  사용자 (모바일 · PC 브라우저)  │
+│  사용자 (모바일 · PC 브라우저) │
 └──────────────┬──────────────┘
                │ HTTPS
                ▼
 ┌─────────────────────────────┐
-│  Vercel — React 19 + Vite    │   kook-hemodialysis-meal-ai.vercel.app
-│  화면 · PDF 생성 · 음성 안내    │
+│  Vercel — React 19 + Vite   │   kook-hemodialysis-meal-ai.vercel.app
+│  화면 · PDF 생성 · 음성 안내  │
 └──────────────┬──────────────┘
                │ REST API (CORS)
                ▼
 ┌─────────────────────────────┐
-│  Render — FastAPI (Docker)   │   kook-backend-ibbe.onrender.com
-│  ┌────────────────────────┐  │
-│  │ Seq2Seq + Attention    │  │  ← 한 끼 생성
-│  │ REINFORCE 체크포인트     │  │  ← 기준 준수 보정
-│  │ 7단계 재조정 레버        │  │  ← 영양 기준 맞춤
-│  │ KLUE-BERT+KNN 대체모델  │  │  ← 저칼륨·저인 재료 대체
-│  │ LLM 레시피 재구성        │  │  ← OpenAI API
-│  │ RAG 영양 상담 챗봇       │  │  ← OpenAI Embeddings + GPT
-│  └────────────────────────┘  │
+│  Render — FastAPI (Docker)  │   kook-backend-ibbe.onrender.com
+│  ┌────────────────────────┐ │
+│  │ Seq2Seq + Attention    │ │  ← 한 끼 생성
+│  │ REINFORCE 체크포인트   │ │  ← 기준 준수 보정
+│  │ 7단계 재조정 레버      │ │  ← 영양 기준 맞춤
+│  │ KLUE-BERT+KNN 대체모델 │ │  ← 저칼륨·저인 재료 대체
+│  │ LLM 레시피 재구성      │ │  ← OpenAI API
+│  │ RAG 영양 상담 챗봇     │ │  ← OpenAI Embeddings + GPT
+│  └────────────────────────┘ │
 └──────┬───────────────┬──────┘
        │               │
        ▼               ▼
-┌─────────────┐  ┌──────────────────┐
-│ Neon        │  │ 음식·영양 데이터    │
-│ Postgres    │  │ CSV · XLSX · JSON │
-│ (회원·식단 등)│  │ (메뉴 992종)      │
-└─────────────┘  └──────────────────┘
+┌───────────────┐  ┌──────────────────┐
+│ Neon          │  │ 음식·영양 데이터 │
+│ Postgres      │  │ CSV · XLSX · JSON │
+│ 회원·기록 데이터 │  │ 메뉴 992종        │
+└───────────────┘  └──────────────────┘
 ```
 
 ---
