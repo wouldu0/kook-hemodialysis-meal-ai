@@ -21,7 +21,6 @@ export function AccountPage() {
         setProfile({
           ...profile,
           gender: p.gender || profile.gender,
-          // 생년월일까지 받아둬야 '수정'으로 프로필 화면에 들어갔을 때 값이 채워져 있다.
           birthdate: p.birthdate || profile.birthdate,
           age: p.age != null ? String(p.age) : profile.age,
           height: p.height_cm != null ? String(p.height_cm) : profile.height,
@@ -70,12 +69,8 @@ export function AccountPage() {
         </div>
       </div>
       <div className="menu-list">
-        <button onClick={() => nav("/history")}>
-          <span>식단 기록</span>
-          <i>›</i>
-        </button>
         <button onClick={() => nav("/favorites")}>
-          <span>식단 관리</span>
+          <span>찜한 식단</span>
           <i>›</i>
         </button>
         <button onClick={() => nav("/documents")}>

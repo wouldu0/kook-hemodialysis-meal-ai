@@ -8,7 +8,7 @@ import { currentUser, deleteEverywhere, loadEverywhere, storage } from "../../se
 import type { SavedItem } from "../../types";
 import { MEAL_TIMES } from "../../utils/date";
 
-// 저장 목록의 카드 한 장 (식단 기록 / 식단 관리 / PDF 보관함 공통)
+// 저장 목록의 카드 한 장 (식사 기록 / 찜한 식단 / PDF 보관함 공통)
 function SavedCard({
   item,
   mode,
@@ -64,8 +64,8 @@ export function LibraryPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
   const meta = {
-    history: ["식단 기록", "최근 생성하고 기록한 식단"],
-    favorites: ["식단 관리", "기록한 식단을 모아두고 다시 불러올 수 있어요"],
+    history: ["식사 기록", "먹은 식사를 기록하고 다음 추천에 반영해요"],
+    favorites: ["찜한 식단", "마음에 든 식단을 모아두고 다시 볼 수 있어요"],
     documents: ["PDF 보관함", "생성한 레시피 문서 기록"],
   }[mode];
   const remove = async (id: string) => {
@@ -81,7 +81,7 @@ export function LibraryPage({
   return (
     <Shell
       header={false}
-      footer={<BottomNav active={mode === "favorites" ? "favorites" : "history"} />}
+      footer={<BottomNav active={mode === "history" ? "history" : "account"} />}
     >
       <BackHeader title={meta[0]} />
       <p className="eyebrow">MY KOOK</p>
@@ -94,7 +94,6 @@ export function LibraryPage({
         </div>
       )}
       {!loading && items.length > 0 && (mode === "favorites" || mode === "history") && (
-        // 식단 관리·식단 기록은 아침 / 점심 / 저녁 섹션으로 한 줄씩 나눠서 보여준다
         <>
           {MEAL_TIMES.map((t) => (
             <section className="meal-slot-section" key={t}>
@@ -119,11 +118,12 @@ export function LibraryPage({
                     ))}
                 </div>
               ) : (
-                <p className="slot-empty">아직 {t} 기록이 없어요.</p>
+                <p className="slot-empty">
+                  {mode === "favorites" ? `아직 찜한 ${t} 식단이 없어요.` : `아직 ${t} 기록이 없어요.`}
+                </p>
               )}
             </section>
           ))}
-          {/* 끼니를 고르기 전에 저장한 예전 기록 */}
           {items.some((x) => !x.mealTime) && (
             <section className="meal-slot-section">
               <h2 className="section-title">끼니 미지정</h2>
@@ -162,8 +162,20 @@ export function LibraryPage({
           <div>
             {mode === "favorites" ? "♡" : mode === "documents" ? "PDF" : "◷"}
           </div>
-          <b>아직 기록된 항목이 없어요.</b>
-          <p>맞춤 식단을 생성한 뒤 기록해보세요.</p>
+          <b>
+            {mode === "favorites"
+              ? "아직 찜한 식단이 없어요."
+              : mode === "history"
+                ? "아직 기록한 식사가 없어요."
+                : "아직 기록된 항목이 없어요."}
+          </b>
+          <p>
+            {mode === "favorites"
+              ? "마음에 드는 식단을 찜해두면 여기에서 다시 볼 수 있어요."
+              : mode === "history"
+                ? "식단을 만든 뒤 실제 식사로 기록해보세요."
+                : "맞춤 식단을 생성한 뒤 기록해보세요."}
+          </p>
           <Button onClick={() => nav("/home")}>식단 만들러 가기</Button>
         </div>
       )}
