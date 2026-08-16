@@ -4,12 +4,19 @@ import { Logo } from "../../components/Logo";
 import { UserIcon } from "../../components/icons";
 import { Shell } from "../../components/layout/Shell";
 import { useApp } from "../../hooks/useApp";
-import { login, saveSession } from "../../services/api";
+import { getMe, login, saveSession } from "../../services/api";
 import { fallbackPlan } from "../../utils/menu";
 
 export function LoginPage() {
   const nav = useNavigate();
-  const { setProfile, setPlan, setQuery, setSearchMode, setApiResult } = useApp();
+  const {
+    setProfile,
+    setPlan,
+    setQuery,
+    setSearchMode,
+    setApiResult,
+    setUsingFallback,
+  } = useApp();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
@@ -26,8 +33,37 @@ export function LoginPage() {
     try {
       const d = await login(username.trim(), password);
       saveSession(d);
-      // 비회원 체험 뒤 실제 로그인을 하면 즉시 회원 모드로 돌아간다.
+
+      // 로그인 직후 서버의 실제 회원 프로필을 다시 읽는다. 비회원 체험을 먼저 했거나
+      // 페이지를 새로 연 경우에도 가상/기본 프로필이 다음 식단 계산에 남지 않게 한다.
+      try {
+        const me = await getMe();
+        const p = me?.profile;
+        if (p) {
+          setProfile({
+            gender: p.gender || "",
+            birthdate: p.birthdate || "",
+            age: p.age != null ? String(p.age) : "",
+            height: p.height_cm != null ? String(p.height_cm) : "",
+            weight: p.weight_kg != null ? String(p.weight_kg) : "",
+            dialysis: p.dialysis_type || "혈액투석",
+          });
+        }
+      } catch {
+        // 인증은 됐지만 개인 프로필을 못 읽으면 맞춤 식단을 잘못 계산할 수 있으므로
+        // 불완전한 세션을 남기지 않고 로그인부터 다시 시도하게 한다.
+        localStorage.removeItem("fook:user");
+        localStorage.removeItem("fook:token");
+        throw new Error("회원 정보를 불러오지 못했습니다. 잠시 후 다시 로그인해주세요.");
+      }
+
+      // 비회원 체험/이전 화면에서 남은 메뉴·결과 상태를 회원 홈으로 가져오지 않는다.
       sessionStorage.removeItem("fook:guest");
+      setQuery("");
+      setSearchMode("menu");
+      setPlan(fallbackPlan);
+      setApiResult(null);
+      setUsingFallback(false);
       nav("/home");
     } catch (e: any) {
       setError(e.message);
