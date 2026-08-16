@@ -5,7 +5,9 @@ import { useApp } from "../../hooks/useApp";
 import {
   buildTodayMealContext,
   generateMeal,
+  isBackendReady,
   loadEverywhere,
+  warmupBackend,
 } from "../../services/api";
 import type { Plan } from "../../types";
 
@@ -15,6 +17,7 @@ export function GeneratingPage() {
     useApp();
   const [s, setS] = useState(0);
   const [error, setError] = useState("");
+  const [warming, setWarming] = useState(!isBackendReady());
   // 오늘 기록한 식사가 이번 요청에 실제로 반영됐을 때만 보여줄 한 줄 힌트.
   const [todayHint, setTodayHint] = useState("");
   const msgs = [
@@ -24,8 +27,10 @@ export function GeneratingPage() {
     "칼륨·나트륨 등 위험 수치를 낮추기 위해 양과 재료를 조정하고 있어요",
     "최종 식단을 정리하고 있어요",
   ];
+
   useEffect(() => {
     let live = true;
+    const controller = new AbortController();
     const t = setInterval(
       () =>
         setS((v) =>
@@ -33,6 +38,7 @@ export function GeneratingPage() {
         ),
       1400,
     );
+
     const run = async () => {
       const body: any = { weight: Number(profile.weight) || 60, meals_left: 3 };
       // 백엔드가 height와 sex를 항상 같이 요구한다(표준체중 계산에 성별이 필요).
@@ -44,25 +50,37 @@ export function GeneratingPage() {
       if (searchMode === "menu" && query.trim()) body.menu = query.trim();
       if (searchMode === "ingredient" && query.trim())
         body.ingredient = query.trim();
-      // 오늘 이미 "기록하기"로 저장해둔 식사가 있으면 그 섭취량/메뉴를 이번 요청에 반영한다.
-      // 이력 조회·집계가 뭐가 됐든 실패하면(네트워크, 파싱 등) 조용히 기존 동작(meals_left: 3,
-      // consumed/used_today 없음)으로 폴백한다 — 절대 생성 자체를 막으면 안 된다.
+
       try {
-        const history = await loadEverywhere("fook:history");
-        const ctx = buildTodayMealContext(history);
-        if (ctx.consumed) body.consumed = ctx.consumed;
-        if (ctx.used_today) body.used_today = ctx.used_today;
-        body.meals_left = ctx.mealsLeft;
-        if (ctx.consumed || ctx.used_today) {
-          setTodayHint(
-            `오늘 기록한 식사 ${ctx.usedSlotCount}끼를 반영해 남은 영양 기준으로 추천하고 있어요.`,
-          );
+        // Render Free가 잠든 상태라면 /generate부터 보내지 않고, 앱 진입 때 시작된 동일
+        // /health warm-up Promise가 끝날 때까지 기다린다. 생성 화면을 나갔다 다시 와도
+        // 새 /health 요청을 쌓지 않는다.
+        if (!isBackendReady()) setWarming(true);
+        await warmupBackend();
+        if (!live) return;
+        setWarming(false);
+        setS(0);
+
+        // 서버가 준비된 뒤에 오늘 식사 기록을 조회한다. cold start 중 history 조회와
+        // /generate가 각각 따로 기다리는 직렬 지연을 피하면서 기존 consumed/used_today/
+        // meals_left 계산 로직은 그대로 유지한다.
+        try {
+          const history = await loadEverywhere("fook:history");
+          const ctx = buildTodayMealContext(history);
+          if (ctx.consumed) body.consumed = ctx.consumed;
+          if (ctx.used_today) body.used_today = ctx.used_today;
+          body.meals_left = ctx.mealsLeft;
+          if (ctx.consumed || ctx.used_today) {
+            setTodayHint(
+              `오늘 기록한 식사 ${ctx.usedSlotCount}끼를 반영해 남은 영양 기준으로 추천하고 있어요.`,
+            );
+          }
+        } catch (histErr) {
+          console.warn("오늘 식사 기록을 불러오지 못해 기본값으로 진행합니다.", histErr);
         }
-      } catch (histErr) {
-        console.warn("오늘 식사 기록을 불러오지 못해 기본값으로 진행합니다.", histErr);
-      }
-      try {
-        const d = await generateMeal(body);
+
+        if (!live) return;
+        const d = await generateMeal(body, { signal: controller.signal });
         if (!live) return;
         setS(4);
         setUsingFallback(false);
@@ -76,7 +94,7 @@ export function GeneratingPage() {
         setPlan(p);
         setTimeout(() => live && nav("/meal"), 500);
       } catch (e) {
-        if (!live) return;
+        if (!live || controller.signal.aborted) return;
         setError(
           "서버에 연결하지 못해 내장 예시 데이터로 진행합니다. 백엔드 서버가 켜져 있는지 확인해주세요.",
         );
@@ -87,9 +105,11 @@ export function GeneratingPage() {
         setTimeout(() => live && nav("/meal"), 1600);
       }
     };
+
     run();
     return () => {
       live = false;
+      controller.abort();
       clearInterval(t);
     };
   }, [
@@ -103,23 +123,33 @@ export function GeneratingPage() {
     setPlan,
     setUsingFallback,
   ]);
+
   return (
     <Shell>
       <div className="loading-page">
         <p className="eyebrow">AI 식단 생성</p>
-        <h1>한 끼를 생성하고 있어요.</h1>
+        <h1>{warming ? "AI 서버를 준비하고 있어요." : "한 끼를 생성하고 있어요."}</h1>
         <div className="loader-plate">
           <span className="loader-emoji">🍲</span>
           <div className="orbit" />
         </div>
         <p className={error ? "loading-message warn" : "loading-message"}>
-          {error || msgs[s]}
+          {error ||
+            (warming
+              ? "무료 데모 서버는 첫 실행 시 약 1분 정도 걸릴 수 있어요."
+              : msgs[s])}
         </p>
         <div className="progress">
-          <i style={{ width: `${((s + 1) / msgs.length) * 100}%` }} />
+          <i
+            style={{
+              width: warming ? "20%" : `${((s + 1) / msgs.length) * 100}%`,
+            }}
+          />
         </div>
-        {!error && todayHint && <p className="loading-hint">{todayHint}</p>}
-        {!error && !todayHint && s >= 2 && (
+        {!error && !warming && todayHint && (
+          <p className="loading-hint">{todayHint}</p>
+        )}
+        {!error && !warming && !todayHint && s >= 2 && (
           <p className="loading-hint">
             영양 기준에 딱 맞는 조합을 찾는 중이라 조금 더 걸릴 수 있어요.
           </p>
