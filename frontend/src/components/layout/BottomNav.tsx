@@ -7,10 +7,10 @@ export function BottomNav({
   active: "home" | "history" | "favorites" | "account";
 }) {
   const nav = useNavigate();
-  // 목업 하단 탭: 홈 / 식단 관리 / 프로필 3개
+  // 핵심 사용 흐름에 맞춰 홈 / 식사 기록 / 프로필을 하단의 주 내비게이션으로 둔다.
   const items = [
     ["home", <HomeIcon key="h" />, "홈", "/home"],
-    ["favorites", <ClipboardIcon key="c" />, "식단 관리", "/favorites"],
+    ["history", <ClipboardIcon key="c" />, "식사 기록", "/history"],
     ["account", <UserIcon key="u" />, "프로필", "/account"],
   ] as const;
   return (
