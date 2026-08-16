@@ -9,7 +9,7 @@ import { fallbackPlan } from "../../utils/menu";
 
 export function LoginPage() {
   const nav = useNavigate();
-  const { setProfile, setPlan, setQuery, setApiResult } = useApp();
+  const { setProfile, setPlan, setQuery, setSearchMode, setApiResult } = useApp();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
@@ -54,6 +54,7 @@ export function LoginPage() {
     });
     setApiResult(null);
     setPlan(fallbackPlan);
+    setSearchMode("menu");
     setQuery("시금치된장국");
     nav("/generating");
   };
