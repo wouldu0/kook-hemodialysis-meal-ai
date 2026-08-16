@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { BackHeader } from "../../components/layout/BackHeader";
 import { BottomNav } from "../../components/layout/BottomNav";
@@ -8,17 +8,22 @@ import { currentUser, deleteEverywhere, loadEverywhere, storage } from "../../se
 import type { SavedItem } from "../../types";
 import { MEAL_TIMES } from "../../utils/date";
 
-// 저장 목록의 카드 한 장 (식사 기록 / 찜한 식단 / PDF 보관함 공통)
+function itemDate(item: SavedItem) {
+  return item.mealDate || item.createdAt.slice(0, 10);
+}
+
 function SavedCard({
   item,
   mode,
   onOpen,
   onRemove,
+  showMealTime = false,
 }: {
   item: SavedItem;
   mode: "history" | "favorites" | "documents";
   onOpen: (x: SavedItem) => void;
   onRemove: (id: string) => void;
+  showMealTime?: boolean;
 }) {
   return (
     <article>
@@ -27,9 +32,8 @@ function SavedCard({
         <b>{item.title}</b>
         <span>{item.subtitle}</span>
         <small>
-          {item.mealDate
-            ? new Date(item.mealDate).toLocaleDateString("ko-KR")
-            : new Date(item.createdAt).toLocaleDateString("ko-KR")}
+          {showMealTime && item.mealTime ? `${item.mealTime} · ` : ""}
+          {new Date(itemDate(item)).toLocaleDateString("ko-KR")}
         </small>
       </button>
       <button className="delete-mini" onClick={() => onRemove(item.id)}>
@@ -49,6 +53,7 @@ export function LibraryPage({
   const key = `fook:${mode}`;
   const [items, setItems] = useState<SavedItem[]>(storage.get(key, []));
   const [loading, setLoading] = useState(true);
+
   useEffect(() => {
     let live = true;
     setLoading(true);
@@ -63,21 +68,53 @@ export function LibraryPage({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
+
   const meta = {
-    history: ["식사 기록", "먹은 식사를 기록하고 다음 추천에 반영해요"],
+    history: ["식사 기록", "날짜별로 먹은 식사를 확인하고 다음 추천에 반영해요"],
     favorites: ["찜한 식단", "마음에 든 식단을 모아두고 다시 볼 수 있어요"],
     documents: ["PDF 보관함", "생성한 레시피 문서 기록"],
   }[mode];
+
+  const sortedItems = useMemo(
+    () =>
+      [...items].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      ),
+    [items],
+  );
+
+  const historyDates = useMemo(() => {
+    if (mode !== "history") return [] as [string, SavedItem[]][];
+    const groups = new Map<string, SavedItem[]>();
+    for (const item of items) {
+      const date = itemDate(item);
+      groups.set(date, [...(groups.get(date) || []), item]);
+    }
+    return [...groups.entries()]
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([date, dayItems]) => [
+        date,
+        [...dayItems].sort((a, b) => {
+          const ai = a.mealTime ? MEAL_TIMES.indexOf(a.mealTime) : MEAL_TIMES.length;
+          const bi = b.mealTime ? MEAL_TIMES.indexOf(b.mealTime) : MEAL_TIMES.length;
+          if (ai !== bi) return ai - bi;
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        }),
+      ] as [string, SavedItem[]]);
+  }, [items, mode]);
+
   const remove = async (id: string) => {
     setItems((prev) => prev.filter((x) => x.id !== id));
     await deleteEverywhere(key, id);
   };
+
   const openItem = (x: SavedItem) => {
     if (x.menus) {
       storage.set("fook:restore", x);
       nav("/home");
     }
   };
+
   return (
     <Shell
       header={false}
@@ -87,66 +124,46 @@ export function LibraryPage({
       <p className="eyebrow">MY KOOK</p>
       <h1>{meta[0]}</h1>
       <p className="sub">{meta[1]}</p>
+
       {loading && (
         <div className="recipe-loading">
           <div className="spinner" />
           <span>불러오는 중...</span>
         </div>
       )}
-      {!loading && items.length > 0 && (mode === "favorites" || mode === "history") && (
+
+      {!loading && items.length > 0 && mode === "history" && (
         <>
-          {MEAL_TIMES.map((t) => (
-            <section className="meal-slot-section" key={t}>
+          {historyDates.map(([date, dayItems]) => (
+            <section className="meal-slot-section" key={date}>
               <h2 className="section-title">
-                {t}
-                <span className="slot-count">
-                  {items.filter((x) => x.mealTime === t).length}
-                </span>
+                {new Date(date).toLocaleDateString("ko-KR", {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
+                <span className="slot-count">{dayItems.length}</span>
               </h2>
-              {items.some((x) => x.mealTime === t) ? (
-                <div className="saved-list">
-                  {items
-                    .filter((x) => x.mealTime === t)
-                    .map((x) => (
-                      <SavedCard
-                        key={x.id}
-                        item={x}
-                        mode={mode}
-                        onOpen={openItem}
-                        onRemove={remove}
-                      />
-                    ))}
-                </div>
-              ) : (
-                <p className="slot-empty">
-                  {mode === "favorites" ? `아직 찜한 ${t} 식단이 없어요.` : `아직 ${t} 기록이 없어요.`}
-                </p>
-              )}
-            </section>
-          ))}
-          {items.some((x) => !x.mealTime) && (
-            <section className="meal-slot-section">
-              <h2 className="section-title">끼니 미지정</h2>
               <div className="saved-list">
-                {items
-                  .filter((x) => !x.mealTime)
-                  .map((x) => (
-                    <SavedCard
-                      key={x.id}
-                      item={x}
-                      mode={mode}
-                      onOpen={openItem}
-                      onRemove={remove}
-                    />
-                  ))}
+                {dayItems.map((x) => (
+                  <SavedCard
+                    key={x.id}
+                    item={x}
+                    mode={mode}
+                    showMealTime
+                    onOpen={openItem}
+                    onRemove={remove}
+                  />
+                ))}
               </div>
             </section>
-          )}
+          ))}
         </>
       )}
-      {!loading && items.length > 0 && mode !== "favorites" && mode !== "history" && (
+
+      {!loading && items.length > 0 && mode === "favorites" && (
         <div className="saved-list">
-          {items.map((x) => (
+          {sortedItems.map((x) => (
             <SavedCard
               key={x.id}
               item={x}
@@ -157,6 +174,21 @@ export function LibraryPage({
           ))}
         </div>
       )}
+
+      {!loading && items.length > 0 && mode === "documents" && (
+        <div className="saved-list">
+          {sortedItems.map((x) => (
+            <SavedCard
+              key={x.id}
+              item={x}
+              mode={mode}
+              onOpen={openItem}
+              onRemove={remove}
+            />
+          ))}
+        </div>
+      )}
+
       {!loading && items.length === 0 && (
         <div className="empty-state">
           <div>
