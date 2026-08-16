@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { BackHeader } from "../../components/layout/BackHeader";
 import { FlowFooter } from "../../components/layout/FlowFooter";
 import { Shell } from "../../components/layout/Shell";
-import { BookmarkIcon, DocIcon, HomeIcon } from "../../components/icons";
+import { BookmarkIcon, ClipboardIcon, DocIcon } from "../../components/icons";
 import { MealSlotDialog } from "../../components/meal/MealSlotDialog";
 import { Nutrients } from "../../components/meal/Nutrients";
 import { RecipeList } from "../../components/meal/RecipeList";
@@ -13,8 +13,8 @@ import type { MealTime } from "../../types";
 import { requireUser } from "../../utils/auth";
 import { adjustedNutrition, totalNutrition } from "../../utils/nutrition";
 
-// 식단을 기록할 때 날짜와 끼니를 고르는 팝업.
-// 여기서 고른 값에 따라 '식단 관리'의 아침/점심/저녁 섹션으로 들어간다.
+// 식사를 기록할 때 날짜와 끼니를 고르는 팝업.
+// 찜한 식단은 바로 저장하고, 식사 기록만 실제 섭취 날짜·끼니를 함께 저장한다.
 export function FinalMealPage() {
   const nav = useNavigate();
   const { plan, apiResult } = useApp();
@@ -36,7 +36,7 @@ export function FinalMealPage() {
   const [askSlot, setAskSlot] = useState<{ key: string; msg: string } | null>(
     null,
   ); // 날짜·끼니 선택 팝업
-  // 식단 기록은 날짜·끼니를 먼저 고르게 하고, 그 외(PDF 등)는 바로 저장한다.
+
   const save = async (key: string, msg: string) => {
     if (!requireUser(nav)) return;
     if (key === "fook:history") return setAskSlot({ key, msg });
@@ -48,6 +48,7 @@ export function FinalMealPage() {
       setSavingKey(null);
     }
   };
+
   const saveWithSlot = async (date: string, time: MealTime) => {
     if (!askSlot) return;
     const { key, msg } = askSlot;
@@ -55,13 +56,15 @@ export function FinalMealPage() {
     setSavingKey(key);
     try {
       await saveEverywhere(key, { ...item, mealDate: date, mealTime: time });
-      alert(`${date} ${time} 식단으로 ${msg}`);
+      alert(`${date} ${time} 식사로 ${msg}`);
     } finally {
       setSavingKey(null);
     }
   };
+
   const finalValues =
     apiResult?.nutrition || adjustedNutrition(totalNutrition(plan));
+
   return (
     <Shell
       header={false}
@@ -92,34 +95,40 @@ export function FinalMealPage() {
         targets={apiResult?.targets}
         isFallback={!apiResult}
       />
-      {/* 하단 탭: 기록 저장 · 홈 · PDF 다운로드 (장바구니 탭은 뺐다) */}
+
+      {/* 찜은 나중에 다시 볼 식단 저장, 기록은 실제 먹은 식사를 날짜·끼니와 함께 저장 */}
       <div className="final-tabs">
         <button
-          disabled={savingKey === "fook:history"}
-          onClick={() => save("fook:history", "기록된 식단에 추가했어요.")}
+          disabled={savingKey === "fook:favorites"}
+          onClick={() => save("fook:favorites", "찜한 식단에 추가했어요.")}
         >
           <BookmarkIcon />
-          <span>{savingKey === "fook:history" ? "기록 중..." : "기록하기"}</span>
+          <span>{savingKey === "fook:favorites" ? "찜하는 중..." : "찜하기"}</span>
         </button>
-        <button onClick={() => nav("/home")}>
-          <HomeIcon />
-          <span>홈</span>
+        <button
+          disabled={savingKey === "fook:history"}
+          onClick={() => save("fook:history", "식사 기록에 추가했어요.")}
+        >
+          <ClipboardIcon />
+          <span>{savingKey === "fook:history" ? "기록 중..." : "기록하기"}</span>
         </button>
         <button onClick={() => nav("/pdf")}>
           <DocIcon />
           <span>PDF 다운로드</span>
         </button>
       </div>
+
       <h2 className="section-title with-icon">📖 레시피 보러가기</h2>
       {/* 새 화면으로 넘어가지 않고 고른 음식의 레시피를 이 자리에서 펼친다 */}
       <RecipeList selected={openRecipe} onSelect={setOpenRecipe} />
-      {/* 비회원 체험을 마쳤을 때만 뜨는 회원가입 안내 */}
+
       {askSlot && (
         <MealSlotDialog
           onCancel={() => setAskSlot(null)}
           onConfirm={saveWithSlot}
         />
       )}
+
       {askJoin && (
         <div className="modal-bg" onClick={() => setAskJoin(false)}>
           <div className="modal ask" onClick={(e) => e.stopPropagation()}>
