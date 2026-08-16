@@ -7,7 +7,7 @@ import { useApp } from "../../hooks/useApp";
 import { Button } from "../../components/layout/Button";
 import { Shell } from "../../components/layout/Shell";
 import { BottomNav } from "../../components/layout/BottomNav";
-import { DiceIcon, LeafIcon, SearchIcon, SlidersIcon } from "../../components/icons";
+import { DiceIcon, LeafIcon, SearchIcon } from "../../components/icons";
 
 export function HomePage() {
   const nav = useNavigate();
@@ -15,13 +15,12 @@ export function HomePage() {
     useApp();
   const [menuList, setMenuList] = useState<string[]>([]);
   const [ingList, setIngList] = useState<string[]>([]);
-  // 데이터 출처 배지는 요청에 따라 화면에서 뺐다. 목록 로딩만 그대로 둔다.
-  // 재료 검색 모드에서 '이 재료가 들어간 메뉴' 목록. 재료를 고르면 채워진다.
   const [ingQuery, setIngQuery] = useState("");
   const [ingMenus, setIngMenus] = useState<string[] | null>(null);
   const [ingLoading, setIngLoading] = useState(false);
   const [randomAsk, setRandomAsk] = useState(false);
   const user = currentUser();
+
   useEffect(() => {
     Promise.all([getMenus(), getIngredients()])
       .then(([m, i]) => {
@@ -32,6 +31,7 @@ export function HomePage() {
         // 서버 미연결이면 로컬 예시 데이터로 자동 폴백된다(아래 names/ingredients).
       });
   }, []);
+
   const localMenus = menuData.map((m) => m.name);
   const names = menuList.length ? menuList : localMenus;
   const suggestions = (
@@ -45,12 +45,13 @@ export function HomePage() {
   const ingSuggestions = ingredients
     .filter((x) => x.includes(ingQuery.trim()))
     .slice(0, 8);
+
   const choose = (name: string) => {
     setQuery(name);
     const p = dietPlans.find((x) => x.menus.includes(name)) as Plan | undefined;
     if (p) setPlan(p);
   };
-  // 재료를 하나 고르면, 그 재료가 실제로 들어간 메뉴를 서버에서 찾아 보여준다.
+
   const pickIngredient = (ing: string) => {
     setIngQuery(ing);
     setIngMenus(null);
@@ -60,21 +61,23 @@ export function HomePage() {
       .catch(() => setIngMenus([]))
       .finally(() => setIngLoading(false));
   };
+
   const chooseFromIngredient = (menuName: string) => {
     setQuery(menuName);
-    setSearchMode("menu"); // /generate에는 결국 menu 조건으로 넘어간다
+    setSearchMode("menu");
     const p = dietPlans.find((x) => x.menus.includes(menuName)) as
       Plan | undefined;
     if (p) setPlan(p);
   };
+
   const canGenerate =
     searchMode === "random" ||
     (searchMode === "menu" && query.trim().length > 0) ||
     (searchMode === "ingredient" && query.trim().length > 0);
+
   return (
     <Shell
       footer={
-        // 하단 탭바는 화면 맨 아래에 고정하고, 그 바로 위에 선택/생성 버튼을 둔다.
         <>
           <Button
             disabled={!canGenerate}
@@ -99,7 +102,7 @@ export function HomePage() {
       <p className="sub">
         건강한 한 끼, <b className="brand-word">KOOK</b>이 함께합니다.
       </p>
-      {/* 목업 1: 음식 검색 / 재료 검색 / 랜덤 추천 3분할 카드 */}
+
       <div className="quick-cards">
         <button
           className={searchMode === "menu" ? "quick-card active" : "quick-card"}
@@ -134,7 +137,7 @@ export function HomePage() {
           onClick={() => {
             setSearchMode("random");
             setQuery("");
-            setRandomAsk(true); // 랜덤 탭은 안내문 대신 확인 팝업을 띄운다
+            setRandomAsk(true);
           }}
         >
           <span className="quick-icon">
@@ -144,6 +147,7 @@ export function HomePage() {
           <small>AI가 랜덤으로 추천해드려요</small>
         </button>
       </div>
+
       {searchMode === "menu" && (
         <>
           <div className="search">
@@ -153,13 +157,11 @@ export function HomePage() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder="메뉴명을 검색해보세요 (예: 두부, 계란찜, 소고기)"
             />
-            <span className="search-filter">
-              <SlidersIcon />
-            </span>
           </div>
           <div className="result-head">
-            <h2 className="section-title">음식 검색 결과</h2>
-            <span className="sort-pill">최신순 ⌄</span>
+            <h2 className="section-title">
+              {query.trim() ? "검색 결과" : "추천 메뉴"}
+            </h2>
           </div>
           <div className="pick-list">
             {suggestions.map((n) => (
@@ -182,6 +184,7 @@ export function HomePage() {
           </div>
         </>
       )}
+
       {searchMode === "ingredient" && (
         <>
           <div className="search">
@@ -258,13 +261,13 @@ export function HomePage() {
           )}
         </>
       )}
+
       {searchMode === "random" && !randomAsk && (
         <button className="random-again" onClick={() => setRandomAsk(true)}>
           🎲 랜덤 추천 다시 받기
         </button>
       )}
-      {/* 하루 세 끼 생성: 한 끼 생성(위 3개 카드)과는 성격이 달라 quick-cards에
-          섞지 않고 별도 카드로 분리해뒀다. */}
+
       <div className="info-box day-plan-card">
         <b>하루 식단 만들기</b>
         <span>아침·점심·저녁을 하루 영양 기준에 맞춰 한 번에 구성해드려요.</span>
@@ -272,7 +275,7 @@ export function HomePage() {
           하루 식단 만들기
         </Button>
       </div>
-      {/* 랜덤 추천 확인 팝업: 왼쪽 아니오 / 오른쪽 네 */}
+
       {randomAsk && (
         <div className="modal-bg" onClick={() => setRandomAsk(false)}>
           <div className="modal ask" onClick={(e) => e.stopPropagation()}>
