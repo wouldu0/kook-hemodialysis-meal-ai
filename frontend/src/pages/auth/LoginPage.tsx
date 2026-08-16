@@ -9,7 +9,7 @@ import { fallbackPlan } from "../../utils/menu";
 
 export function LoginPage() {
   const nav = useNavigate();
-  const { setPlan, setQuery, setApiResult } = useApp();
+  const { setProfile, setPlan, setQuery, setApiResult } = useApp();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
@@ -26,6 +26,8 @@ export function LoginPage() {
     try {
       const d = await login(username.trim(), password);
       saveSession(d);
+      // 비회원 체험 뒤 실제 로그인을 하면 즉시 회원 모드로 돌아간다.
+      sessionStorage.removeItem("fook:guest");
       nav("/home");
     } catch (e: any) {
       setError(e.message);
@@ -34,6 +36,22 @@ export function LoginPage() {
     }
   };
   const tryGuest = () => {
+    // 이전에 이 브라우저에서 로그인했던 정보가 localStorage에 남아 있어도 비회원 체험에는
+    // 절대 섞이지 않게 한다. 서버의 계정/기록 자체를 지우는 것이 아니라 이 브라우저가
+    // 들고 있던 인증 토큰만 내려놓는다.
+    localStorage.removeItem("fook:user");
+    localStorage.removeItem("fook:token");
+    sessionStorage.setItem("fook:guest", "1");
+
+    // 모달에서 안내한 가상 프로필과 실제 생성 요청에 쓰는 값이 정확히 같아야 한다.
+    setProfile({
+      gender: "남성",
+      birthdate: "",
+      age: "65",
+      height: "170",
+      weight: "60",
+      dialysis: "혈액투석",
+    });
     setApiResult(null);
     setPlan(fallbackPlan);
     setQuery("시금치된장국");
