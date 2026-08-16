@@ -34,23 +34,39 @@ export type ApiFetchOptions = RequestInit & {
 };
 
 export async function apiFetch(path: string, options: ApiFetchOptions = {}) {
-  const { responseType = "json", timeoutMs = 75000, ...init } = options;
+  const {
+    responseType = "json",
+    timeoutMs = 75000,
+    signal: externalSignal,
+    ...init
+  } = options;
   const headers = new Headers(init.headers || {});
   if (!headers.has("Content-Type") && init.body)
     headers.set("Content-Type", "application/json");
   const token = authToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  // 요청별 timeout과 호출부의 AbortSignal을 하나의 controller로 합친다.
+  // 이전에는 apiFetch가 자체 signal로 덮어써서 화면 이탈 시 외부 abort가 실제 fetch까지
+  // 전달되지 않았다.
   const controller = new AbortController();
+  let timedOut = false;
+  const abortFromExternal = () => controller.abort();
+  if (externalSignal?.aborted) controller.abort();
+  else externalSignal?.addEventListener("abort", abortFromExternal, { once: true });
+
   // 무료 호스팅은 요청이 없으면 잠들고, 깨어나는 데 1분 가까이 걸린다.
-  // 12초로 끊으면 잠든 직후의 첫 요청이 무조건 실패하므로 넉넉히 잡는다.
-  const tid = setTimeout(() => controller.abort(), timeoutMs);
+  const tid = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
   try {
     const r = await fetch(`${API}${path}`, {
       ...init,
       headers,
       signal: controller.signal,
     });
-    clearTimeout(tid);
     if (!r.ok) {
       let msg = "요청을 처리하지 못했습니다.";
       try {
@@ -62,11 +78,12 @@ export async function apiFetch(path: string, options: ApiFetchOptions = {}) {
     if (responseType === "blob") return r.blob();
     return r.status === 204 ? null : r.json();
   } catch (e: any) {
-    clearTimeout(tid);
-    if (e.name === "AbortError")
+    if (e.name === "AbortError") {
+      if (externalSignal?.aborted && !timedOut) throw e;
       throw new Error(
         "서버 응답 속도가 느려 시간 초과되었습니다. 잠시 후 다시 시도해주세요.",
       );
+    }
     // 네트워크 자체가 안 닿으면 브라우저는 "Failed to fetch"라는 원문만 준다.
     // (백엔드 미실행, 또는 서버가 아직 로딩 중이라 포트가 안 열린 경우)
     if (e instanceof TypeError)
@@ -74,6 +91,9 @@ export async function apiFetch(path: string, options: ApiFetchOptions = {}) {
         "서버에 연결하지 못했습니다. 백엔드가 실행 중인지 확인해주세요.",
       );
     throw e;
+  } finally {
+    clearTimeout(tid);
+    externalSignal?.removeEventListener("abort", abortFromExternal);
   }
 }
 
@@ -292,9 +312,30 @@ export function buildTodayMealContext(history: SavedItem[]): TodayMealContext {
 // 화면 컴포넌트는 아래 함수만 부르면 된다 — URL·타임아웃·헤더·에러 처리는
 // 전부 apiFetch()가 책임진다.
 
+let backendWarmupPromise: Promise<unknown> | null = null;
+let backendReady = false;
+
+export function isBackendReady() {
+  return backendReady;
+}
+
 export function warmupBackend() {
-  // 무료 호스팅은 한동안 요청이 없으면 잠든다. 온보딩을 보는 동안 미리 깨워둔다.
-  return apiFetch("/health").catch(() => {});
+  // 앱 전체에서 하나의 /health 요청만 공유한다. 서버가 깨어나는 중 생성 화면을 나갔다가
+  // 다시 들어와도 새 /health 요청을 쌓지 않고 이미 진행 중인 warm-up을 그대로 기다린다.
+  if (backendReady) return Promise.resolve();
+  if (backendWarmupPromise) return backendWarmupPromise;
+
+  backendWarmupPromise = apiFetch("/health", { timeoutMs: 120000 })
+    .then((result) => {
+      backendReady = true;
+      return result;
+    })
+    .catch((error) => {
+      // 실패한 Promise를 영구 캐시하면 이후 재시도가 불가능하므로 다시 시도할 수 있게 비운다.
+      backendWarmupPromise = null;
+      throw error;
+    });
+  return backendWarmupPromise;
 }
 
 export function getMenus(): Promise<{ menus: string[] }> {
@@ -309,9 +350,18 @@ export function getMenusByIngredient(q: string): Promise<{ menus: string[] }> {
   return apiFetch(`/menus_by_ingredient?q=${encodeURIComponent(q)}`);
 }
 
-export function generateMeal(body: Record<string, unknown>): Promise<ApiResult> {
-  // 조건에 맞는 조합을 찾을 때까지 재시도하는 구조라 원래 느리다.
-  return apiFetch("/generate", { method: "POST", body: JSON.stringify(body), timeoutMs: 60000 });
+export function generateMeal(
+  body: Record<string, unknown>,
+  options: { signal?: AbortSignal } = {},
+): Promise<ApiResult> {
+  // cold start는 warmupBackend() 단계에서 먼저 끝낸다. 이 120초는 네트워크 이상 등
+  // 예외 상황에서 생성 요청이 무한정 매달리지 않게 하는 안전장치다.
+  return apiFetch("/generate", {
+    method: "POST",
+    body: JSON.stringify(body),
+    timeoutMs: 120000,
+    signal: options.signal,
+  });
 }
 
 export function generateDayPlan(body: Record<string, unknown>): Promise<DayPlanResult> {

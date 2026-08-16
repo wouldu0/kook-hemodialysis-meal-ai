@@ -83,7 +83,8 @@ function App() {
   // 무료 호스팅 백엔드는 한동안 요청이 없으면 잠든다. 사용자가 소개 화면을
   // 넘기는 동안 미리 깨워두면, 회원가입/로그인 차례에는 이미 준비된 상태가 된다.
   useEffect(() => {
-    warmupBackend();
+    // 실패해도 앱 화면은 즉시 보여주고, 실제 생성 화면에서 warmupBackend()가 재시도한다.
+    void warmupBackend().catch(() => {});
   }, []);
   const [profile, setProfile] = useState(initialProfile);
   const [plan, setPlan] = useState<Plan>(fallbackPlan);
