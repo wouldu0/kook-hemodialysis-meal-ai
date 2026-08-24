@@ -4,12 +4,61 @@ import { BackHeader } from "../../components/layout/BackHeader";
 import { BottomNav } from "../../components/layout/BottomNav";
 import { Button } from "../../components/layout/Button";
 import { Shell } from "../../components/layout/Shell";
-import { currentUser, deleteEverywhere, loadEverywhere, storage } from "../../services/api";
+import { currentUser, deleteEverywhere, isValidIntake, loadEverywhere, storage } from "../../services/api";
 import type { SavedItem } from "../../types";
-import { MEAL_TIMES } from "../../utils/date";
+import { MEAL_TIMES, todayISO } from "../../utils/date";
+import { fmt, intakeToDisplay, nmeta } from "../../utils/nutrition";
+
+const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 
 function itemDate(item: SavedItem) {
   return item.mealDate || item.createdAt.slice(0, 10);
+}
+
+// year/month(0-indexed)의 달력 셀을 7일씩 끊어 반환한다. 그 달에 속하지 않는 칸은 null.
+function monthGrid(year: number, month: number): (string | null)[][] {
+  const startDow = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: (string | null)[] = Array(startDow).fill(null);
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells.push(`${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+  }
+  while (cells.length % 7 !== 0) cells.push(null);
+  const rows: (string | null)[][] = [];
+  for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
+  return rows;
+}
+
+// 그 날 기록 중 intake가 유효한 것만 합산한다(구버전/미완성 기록은 건너뜀). 하나도
+// 없으면 undefined — "0"으로 오해될 만한 합계를 보여주지 않기 위해서다.
+function daySummary(dayItems: SavedItem[]): Record<string, number> | undefined {
+  let sum: Record<string, number> | undefined;
+  for (const item of dayItems) {
+    if (!isValidIntake(item.intake)) continue;
+    const d = intakeToDisplay(item.intake);
+    if (!sum) sum = { energy: 0, protein: 0, potassium: 0, phosphorus: 0, sodium: 0 };
+    for (const k of Object.keys(d)) sum[k] += d[k as keyof typeof d];
+  }
+  return sum;
+}
+
+function NutritionLine({
+  values,
+  className = "intake-line",
+}: {
+  values: Record<string, number>;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      {nmeta.map((n) => (
+        <span key={n.key}>
+          {n.icon} {fmt(values[n.key] ?? 0)}
+          {n.unit}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 function SavedCard({
@@ -25,6 +74,7 @@ function SavedCard({
   onRemove: (id: string) => void;
   showMealTime?: boolean;
 }) {
+  const intake = mode === "history" && isValidIntake(item.intake) ? item.intake : undefined;
   return (
     <article>
       <div className="saved-thumb">{mode === "documents" ? "PDF" : "KOOK"}</div>
@@ -35,6 +85,7 @@ function SavedCard({
           {showMealTime && item.mealTime ? `${item.mealTime} · ` : ""}
           {new Date(itemDate(item)).toLocaleDateString("ko-KR")}
         </small>
+        {intake && <NutritionLine values={intakeToDisplay(intake)} />}
       </button>
       <button className="delete-mini" onClick={() => onRemove(item.id)}>
         ×
@@ -53,6 +104,8 @@ export function LibraryPage({
   const key = `fook:${mode}`;
   const [items, setItems] = useState<SavedItem[]>(storage.get(key, []));
   const [loading, setLoading] = useState(true);
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date());
+  const [selectedDate, setSelectedDate] = useState(() => todayISO());
 
   useEffect(() => {
     let live = true;
@@ -83,25 +136,28 @@ export function LibraryPage({
     [items],
   );
 
-  const historyDates = useMemo(() => {
-    if (mode !== "history") return [] as [string, SavedItem[]][];
-    const groups = new Map<string, SavedItem[]>();
-    for (const item of items) {
-      const date = itemDate(item);
-      groups.set(date, [...(groups.get(date) || []), item]);
-    }
-    return [...groups.entries()]
-      .sort(([a], [b]) => b.localeCompare(a))
-      .map(([date, dayItems]) => [
-        date,
-        [...dayItems].sort((a, b) => {
-          const ai = a.mealTime ? MEAL_TIMES.indexOf(a.mealTime) : MEAL_TIMES.length;
-          const bi = b.mealTime ? MEAL_TIMES.indexOf(b.mealTime) : MEAL_TIMES.length;
-          if (ai !== bi) return ai - bi;
-          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        }),
-      ] as [string, SavedItem[]]);
+  // 달력에 점으로 표시할, 기록이 있는 날짜 집합.
+  const historyDateSet = useMemo(() => {
+    if (mode !== "history") return new Set<string>();
+    return new Set(items.map(itemDate));
   }, [items, mode]);
+
+  // 달력에서 선택한 날짜(selectedDate)의 기록만 뽑는다 — 아침/점심/저녁 순 정렬.
+  const selectedDayItems = useMemo(() => {
+    if (mode !== "history") return [] as SavedItem[];
+    return items
+      .filter((item) => itemDate(item) === selectedDate)
+      .sort((a, b) => {
+        const ai = a.mealTime ? MEAL_TIMES.indexOf(a.mealTime) : MEAL_TIMES.length;
+        const bi = b.mealTime ? MEAL_TIMES.indexOf(b.mealTime) : MEAL_TIMES.length;
+        if (ai !== bi) return ai - bi;
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      });
+  }, [items, mode, selectedDate]);
+
+  const shiftMonth = (delta: number) => {
+    setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
+  };
 
   const remove = async (id: string) => {
     setItems((prev) => prev.filter((x) => x.id !== id));
@@ -134,18 +190,65 @@ export function LibraryPage({
 
       {!loading && items.length > 0 && mode === "history" && (
         <>
-          {historyDates.map(([date, dayItems]) => (
-            <section className="meal-slot-section" key={date}>
-              <h2 className="section-title">
-                {new Date(date).toLocaleDateString("ko-KR", {
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
+          <div className="calendar-inline">
+            <div className="calendar-nav">
+              <button onClick={() => shiftMonth(-1)} aria-label="이전 달">
+                ‹
+              </button>
+              <b>
+                {calendarMonth.getFullYear()}년 {calendarMonth.getMonth() + 1}월
+              </b>
+              <button onClick={() => shiftMonth(1)} aria-label="다음 달">
+                ›
+              </button>
+            </div>
+            <div className="calendar-dow">
+              {DOW.map((d) => (
+                <span key={d}>{d}</span>
+              ))}
+            </div>
+            <div className="calendar-grid">
+              {monthGrid(calendarMonth.getFullYear(), calendarMonth.getMonth())
+                .flat()
+                .map((date, i) => {
+                  if (!date) return <span className="calendar-cell empty" key={`e${i}`} />;
+                  const has = historyDateSet.has(date);
+                  const isToday = date === todayISO();
+                  const isSelected = date === selectedDate;
+                  return (
+                    <button
+                      key={date}
+                      className={`calendar-cell${has ? " has-record" : ""}${isToday ? " today" : ""}${isSelected ? " selected" : ""}`}
+                      onClick={() => setSelectedDate(date)}
+                    >
+                      {Number(date.slice(-2))}
+                    </button>
+                  );
                 })}
-                <span className="slot-count">{dayItems.length}</span>
-              </h2>
+            </div>
+          </div>
+
+          <h2 className="section-title">
+            {new Date(selectedDate).toLocaleDateString("ko-KR", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+            {selectedDayItems.length > 0 && (
+              <span className="slot-count">{selectedDayItems.length}</span>
+            )}
+          </h2>
+
+          {selectedDayItems.length > 0 ? (
+            <>
+              {daySummary(selectedDayItems) && (
+                <NutritionLine
+                  values={daySummary(selectedDayItems)!}
+                  className="intake-line day-total"
+                />
+              )}
               <div className="saved-list">
-                {dayItems.map((x) => (
+                {selectedDayItems.map((x) => (
                   <SavedCard
                     key={x.id}
                     item={x}
@@ -156,8 +259,13 @@ export function LibraryPage({
                   />
                 ))}
               </div>
-            </section>
-          ))}
+            </>
+          ) : (
+            <div className="empty-state day-empty">
+              <div>◷</div>
+              <p>이 날은 기록한 식사가 없어요.</p>
+            </div>
+          )}
         </>
       )}
 

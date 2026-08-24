@@ -15,6 +15,25 @@ export const nmeta: {
   { key: "sodium", label: "나트륨", unit: "mg", target: 400, icon: "🧂" },
 ];
 
+// meal_records에 저장된 intake({E,protein,K,P,Na,Na_season})를 nmeta/fmt와 같은
+// NutrientKey 체계로 바꾼다. Na_season(조미료로 추가한 나트륨만 따로 관리하는 내부 예산)은
+// 화면에 보여줄 대상이 아니라서 제외한다 — 여기서 보여줄 나트륨은 재료 자체의 총 나트륨(Na).
+export function intakeToDisplay(intake: {
+  E: number;
+  protein: number;
+  K: number;
+  P: number;
+  Na: number;
+}): Record<NutrientKey, number> {
+  return {
+    energy: intake.E,
+    protein: intake.protein,
+    potassium: intake.K,
+    phosphorus: intake.P,
+    sodium: intake.Na,
+  };
+}
+
 export function totalNutrition(plan: Plan) {
   return plan.menus.reduce(
     (a, name) => {

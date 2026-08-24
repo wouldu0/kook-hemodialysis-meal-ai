@@ -227,7 +227,7 @@ const CONSUMED_KEYS = ["E", "protein", "K", "P", "Na", "Na_season"] as const;
 
 const STANDARD_MEAL_TIMES: MealTime[] = ["아침", "점심", "저녁"];
 
-function isValidIntake(
+export function isValidIntake(
   intake: SavedItem["intake"],
 ): intake is NonNullable<SavedItem["intake"]> {
   if (!intake) return false;
