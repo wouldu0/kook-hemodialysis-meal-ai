@@ -34,7 +34,7 @@ from database import db
 from auth_utils import hash_password, verify_password, issue_session, resolve_user
 from rate_limit import rate_limit
 from schemas import (
-    CartReq, ChatReq, DayReq, FindIdReq, GenReq, LoginReq,
+    CartReq, ChatReq, DayReq, DayTargetsReq, FindIdReq, GenReq, LoginReq,
     ProfileReq, RecipeReq, ResetPasswordReq, SaveReq, SignupReq, TTSReq,
 )
 
@@ -340,6 +340,12 @@ def generate_day(req: DayReq):
         return [(x or None) for x in lst] if lst else None
     return core.day_result(weight=req.weight, height=req.height, sex=req.sex,
                            menus=clean(req.menus), ingredients=clean(req.ingredients))
+
+
+@app.post('/day_targets')
+def day_targets(req: DayTargetsReq):
+    """메뉴 생성 없이 하루 전체 영양 기준만 계산. 식사 기록 화면의 진행률 표시용."""
+    return core.day_targets_only(weight=req.weight, height=req.height, sex=req.sex)
 
 
 @app.post('/recipe', dependencies=[Depends(rate_limit('recipe', 20, 300))])

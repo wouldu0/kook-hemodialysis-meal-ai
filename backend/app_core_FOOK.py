@@ -611,6 +611,20 @@ def meal_result(menu=None, ingredient=None, weight=60, consumed=None, meals_left
 MEAL_LABELS = ('아침', '점심', '저녁')
 
 
+def day_targets_only(weight=60, height=None, sex=None):
+    """메뉴 생성 없이 하루 전체 영양 기준만 계산해서 반환한다.
+    day_result()의 day_targets와 계산식은 같지만, 후보 생성(make_meal)을 전혀 돌리지 않아
+    훨씬 가볍다 — 식사 기록 화면에서 '오늘 얼마나 채웠는지' 진행률을 보여줄 때 쓴다."""
+    if height is not None:
+        weight = F.standard_weight(height, sex)
+    d = F.day_targets(weight)
+    return {'energy': [round(d['Elo']), round(d['Ehi'])],
+            'protein': [round(d['Plo'], 1), round(d['Phi'], 1)],
+            'potassium': round(d['Kmax']),
+            'phosphorus': round(d['Pmax']),
+            'sodium': round(d['Namax'])}
+
+
 def day_result(weight=60, menus=None, ingredients=None, height=None, sex=None):
     """하루 세 끼를 '남은 예산' 방식으로 이어서 생성.
     앞 끼에서 먹은 양을 빼고 남은 끼니로 나눠 다음 끼 목표를 잡으므로, 한 끼씩 따로 만들 때와 달리

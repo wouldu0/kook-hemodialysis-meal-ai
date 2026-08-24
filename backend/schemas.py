@@ -131,6 +131,10 @@ class DayReq(HeightSexMixin):
         return v
 
 
+class DayTargetsReq(HeightSexMixin):
+    weight: int = Field(default=60, ge=20, le=300)  # ProfileReq.weight와 동일 범위 — 위 GenReq.weight 주석 참고
+
+
 class RecipeReq(BaseModel):
     menu: str
     ingredients: list

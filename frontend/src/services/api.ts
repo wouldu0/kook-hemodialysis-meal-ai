@@ -369,6 +369,20 @@ export function generateDayPlan(body: Record<string, unknown>): Promise<DayPlanR
   return apiFetch("/generate_day", { method: "POST", body: JSON.stringify(body), timeoutMs: 90000 });
 }
 
+// 하루 전체 영양 기준(메뉴 생성 없이). energy/protein은 [최소,최대] 범위, 나머지는 상한
+// 하나 — utils/nutrition.ts의 targetOf()/minTargetOf()가 그대로 읽을 수 있는 모양이다.
+export type DayTargets = {
+  energy: [number, number];
+  protein: [number, number];
+  potassium: number;
+  phosphorus: number;
+  sodium: number;
+};
+
+export function fetchDayTargets(body: Record<string, unknown>): Promise<DayTargets> {
+  return apiFetch("/day_targets", { method: "POST", body: JSON.stringify(body) });
+}
+
 export function generateRecipe(payload: {
   menu: string;
   ingredients: [string, number][];

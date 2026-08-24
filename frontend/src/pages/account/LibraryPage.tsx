@@ -4,10 +4,27 @@ import { BackHeader } from "../../components/layout/BackHeader";
 import { BottomNav } from "../../components/layout/BottomNav";
 import { Button } from "../../components/layout/Button";
 import { Shell } from "../../components/layout/Shell";
-import { currentUser, deleteEverywhere, isValidIntake, loadEverywhere, storage } from "../../services/api";
+import {
+  currentUser,
+  deleteEverywhere,
+  fetchDayTargets,
+  isValidIntake,
+  loadEverywhere,
+  storage,
+  type DayTargets,
+} from "../../services/api";
+import { useApp } from "../../hooks/useApp";
 import type { SavedItem } from "../../types";
 import { MEAL_TIMES, todayISO } from "../../utils/date";
-import { fmt, intakeToDisplay, nmeta } from "../../utils/nutrition";
+import {
+  fmt,
+  intakeToDisplay,
+  minTargetOf,
+  nmeta,
+  STATUS_CLASS,
+  statusOf,
+  targetOf,
+} from "../../utils/nutrition";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -61,6 +78,46 @@ function NutritionLine({
   );
 }
 
+// 하루 합계(values)를 그 사람의 실제 하루 기준(targets, /day_targets)과 비교해
+// 칸이 얼마나 채워졌는지 막대로 보여준다. targetOf/minTargetOf/statusOf는 끼니별
+// 화면(Nutrients)에서 이미 쓰는 것과 같은 함수라 판정 기준이 화면마다 다르지 않다.
+function DayProgress({
+  values,
+  targets,
+}: {
+  values: Record<string, number>;
+  targets: DayTargets;
+}) {
+  return (
+    <div className="day-progress">
+      {nmeta.map((n) => {
+        const hi = targetOf(targets, n.key);
+        const lo = minTargetOf(targets, n.key);
+        const v = values[n.key] ?? 0;
+        // 막대 너비는 트랙을 벗어날 수 없어 100%에서 자르지만, 옆 숫자는 실제 초과분이
+        // 보이도록 그대로 둔다 — "100%"만 보이면 얼마나 넘었는지 알 수 없다.
+        const rawPct = hi > 0 ? Math.round((v / hi) * 100) : 0;
+        const barPct = Math.min(100, rawPct);
+        const status = statusOf(v, lo, hi);
+        return (
+          <div className={`day-progress-row ${STATUS_CLASS[status]}`} key={n.key}>
+            <span className="day-progress-label">
+              {n.icon} {n.label}
+            </span>
+            <div className="day-progress-track">
+              <div className="day-progress-fill" style={{ width: `${barPct}%` }} />
+            </div>
+            <span className="day-progress-value">
+              {fmt(v)}/{fmt(hi)}
+              {n.unit} · {rawPct}%
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function SavedCard({
   item,
   mode,
@@ -101,11 +158,30 @@ export function LibraryPage({
 }) {
   const nav = useNavigate();
   if (!currentUser()) return <Navigate to="/login" replace />;
+  const { profile } = useApp();
   const key = `fook:${mode}`;
   const [items, setItems] = useState<SavedItem[]>(storage.get(key, []));
   const [loading, setLoading] = useState(true);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(() => todayISO());
+  const [dayTargets, setDayTargets] = useState<DayTargets | null>(null);
+
+  useEffect(() => {
+    if (mode !== "history") return;
+    let live = true;
+    const body: Record<string, unknown> = { weight: Number(profile.weight) || 60 };
+    if (profile.height) {
+      body.height = Number(profile.height);
+      body.sex = profile.gender === "남성" ? "남" : "여";
+    }
+    // 실패해도(오프라인 등) 그냥 원래대로 숫자만 보여준다 — 기준 없이 %를 지어내지 않는다.
+    fetchDayTargets(body)
+      .then((d) => live && setDayTargets(d))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [mode, profile.weight, profile.height, profile.gender]);
 
   useEffect(() => {
     let live = true;
@@ -241,12 +317,15 @@ export function LibraryPage({
 
           {selectedDayItems.length > 0 ? (
             <>
-              {daySummary(selectedDayItems) && (
-                <NutritionLine
-                  values={daySummary(selectedDayItems)!}
-                  className="intake-line day-total"
-                />
-              )}
+              {daySummary(selectedDayItems) &&
+                (dayTargets ? (
+                  <DayProgress values={daySummary(selectedDayItems)!} targets={dayTargets} />
+                ) : (
+                  <NutritionLine
+                    values={daySummary(selectedDayItems)!}
+                    className="intake-line day-total"
+                  />
+                ))}
               <div className="saved-list">
                 {selectedDayItems.map((x) => (
                   <SavedCard
