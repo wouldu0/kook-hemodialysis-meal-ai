@@ -48,28 +48,13 @@ const slides = [
 ] as const;
 
 // 첫 화면: "오늘 뭐 해 먹지?" 스플래시. 시작하기를 누르면 온보딩 5단계로 들어간다.
-// "시작하기" 버튼은 항상 실제 DOM 버튼이다 — 그림에는 텍스트나 버튼을 굽지 않으므로,
-// 이미지를 새로 바꿔도 버튼 위치가 어긋날 일이 없다. 그림이 있을 때는 그림 하단부
-// 안쪽에 버튼을 얹고(.splash-cta), 그림이 없을 때만 Shell 하단 footer 버튼을 쓴다.
+// 온보딩 1~5단계와 같은 틀(.onboarding-page > .onboarding-photo, 하단 pill 버튼)을 그대로
+// 써서, 이 화면만 사진이 여백 없이 화면 전체를 채우다가 다음 화면부터 갑자기 카드 안에
+// 작게 들어가 보이던 크기 불일치를 없앤다. 제목("오늘 뭐 먹지?")은 사진 안에 이미 그려져
+// 있어(onboarding-home.png), 다른 단계처럼 실시간 텍스트 제목을 그 위에 또 얹지 않는다
+// (얹으면 같은 문구가 두 번 보임) — 대신 .splash-photo가 그 자리만큼 위쪽 여백을 더 준다.
 function Splash({ onStart }: { onStart: () => void }) {
   const [shotFailed, setShotFailed] = useState(false);
-  if (!shotFailed)
-    return (
-      <Shell header={false} full>
-        <div className="splash-shot">
-          <div className="splash-frame">
-            <img
-              src="/assets/onboarding-home.png"
-              alt="오늘 뭐 해 먹지? 고민에 푹 빠질 땐 KOOK이 도와드립니다"
-              onError={() => setShotFailed(true)}
-            />
-            <button className="splash-cta" onClick={onStart}>
-              시작하기 <i className="btn-arrow">→</i>
-            </button>
-          </div>
-        </div>
-      </Shell>
-    );
   return (
     <Shell
       header={false}
@@ -78,28 +63,38 @@ function Splash({ onStart }: { onStart: () => void }) {
           시작하기 <i className="btn-arrow">→</i>
         </button>
       }
+      full
     >
-      <div className="splash">
-        <Logo className="splash-logo" />
-        <h1 className="splash-title">오늘 뭐 먹지?</h1>
-        <p className="splash-sub">
-          고민에 <b>푹</b> 빠질 땐,
-          <br />
-          <b>KOOK(쿡)</b>이 도와드립니다
-        </p>
-        <div className="thought-bubble">
-          {[
-            ["🥣", "건강한 식단"],
-            ["📋", "영양 균형"],
-            ["🍲", "간편한 관리"],
-          ].map(([icon, text]) => (
-            <div key={text}>
-              <span>{icon}</span>
-              <small>{text}</small>
+      <div className="onboarding-page">
+        <div className="onboarding-photo splash-photo">
+          {!shotFailed ? (
+            <img
+              src="/assets/onboarding-home.png"
+              alt="오늘 뭐 해 먹지? 고민에 푹 빠질 땐 KOOK이 도와드립니다"
+              onError={() => setShotFailed(true)}
+            />
+          ) : (
+            <div className="visual-card splash-fallback">
+              <Logo className="splash-logo" />
+              <h1 className="splash-title">오늘 뭐 먹지?</h1>
+              <p className="splash-sub">
+                고민에 <b>푹</b> 빠질 땐, <b>KOOK(쿡)</b>이 도와드립니다
+              </p>
+              <div className="thought-bubble">
+                {[
+                  ["🥣", "건강한 식단"],
+                  ["📋", "영양 균형"],
+                  ["🍲", "간편한 관리"],
+                ].map(([icon, text]) => (
+                  <div key={text}>
+                    <span>{icon}</span>
+                    <small>{text}</small>
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
+          )}
         </div>
-        <p className="splash-caption">혈액투석 환자를 위한 AI 기반 맞춤형 식단 관리 및 레시피 재구성 솔루션</p>
       </div>
     </Shell>
   );

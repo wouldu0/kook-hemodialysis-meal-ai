@@ -361,67 +361,18 @@
 .onboarding-photo .visual-card { margin: 0; height: 100%; }
 
 /* ============================================================================
-   v22 — 스플래시 이미지 · 체험 안내 팝업 · 저장 목적지 통일
+   v23 — 스플래시를 온보딩 단계와 같은 틀로 (첫 화면만 사진이 화면을 꽉 채우다가
+   다음 화면부터 카드 안에 작게 들어가 보이던 크기 불일치를 없앤다).
    ========================================================================== */
-/* 스플래시: 일러스트 한 장을 화면 가득 보여준다. 그림에는 문구나 버튼을 굽지
-   않는다 — "시작하기"는 그림 위에 얹는 실제 버튼이다(.splash-cta, Splash 함수 참고). */
-.splash-shot {
-  width: 100%; height: 100%;
-  /* 줄어든 이미지 둘레를 채우는 색 — 그림 테두리에서 가장 많이 나온 색(실측) */
-  background: #F7EDE0;
-  display: flex; align-items: center; justify-content: center;
-  overflow: hidden;
-  /* 자기 자신을 '크기' 컨테이너로 삼아 아래에서 100cqh(남은 세로)를 쓸 수 있게 한다 */
-  container-type: size;
+/* 스플래시 사진은 onboarding-photo 카드를 그대로 쓰되, 실시간 제목이 없는 만큼
+   위쪽 여백을 조금 더 줘서 카드가 화면 맨 위에 바로 붙지 않게 한다. */
+.splash-photo { padding-top: var(--sp-lg); }
+/* 이미지가 404 등으로 안 뜰 때만 보이는 대체 화면 — 카드 안에서 가운데 정렬. */
+.splash-fallback {
+  height: 100%; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; text-align: center;
+  gap: var(--sp-sm);
 }
-/* ── 스플래시 이미지 크기 ──────────────────────────────────────────────────
-   --splash-ar    이미지의 세로/가로 비율. 이미지를 교체하면 이 값만 실제 픽셀에
-                  맞춰 고치면 되고, 아래 계산은 손댈 필요가 없다.
-   --splash-scale 화면에 꽉 맞췄을 때 대비 배율. 1 = 잘림 없이 최대 크기,
-                  값을 낮출수록 그림이 작아지고 둘레 여백이 넓어진다.
-                  여백은 .splash-shot 배경색으로 채워져 그림과 이어져 보인다.
-
-   폭은 '세로·가로 어느 쪽도 넘치지 않는 크기'(min)에 배율을 곱해 잡는다. */
-.splash-frame {
-  --splash-ar: 2.167;   /* onboarding-home.png = 852 x 1846 */
-  --splash-scale: 1;
-  position: relative;
-  flex: none;                        /* flex가 임의로 줄이지 못하게 */
-  width: calc(
-    min(100cqw, calc(100cqh / var(--splash-ar))) * var(--splash-scale)
-  );
-  aspect-ratio: 1 / var(--splash-ar);
-  /* 그림 자체의 둥근 모서리 바깥이 흰색이라, 같은 크기로 깎아 크림색 배경 위에
-     카드처럼 놓이게 한다 (흰 모서리 자국 제거) */
-  border-radius: clamp(10px, 3.5cqw, 18px);
-  overflow: hidden;
-}
-.splash-frame img {
-  display: block;
-  width: 100%; height: 100%;
-  object-fit: cover; object-position: center;
-}
-@supports not (width: 100cqh) {
-  /* 컨테이너 크기 쿼리 미지원 브라우저: 확대 없이 폭에 맞춘다 */
-  .splash-frame { width: 100%; }
-}
-
-/* 그림 중앙 하단쪽에 얹는 실제 "시작하기" 버튼. 그림 속 특정 좌표를 실측해
-   맞춘 게 아니라 우리가 정한 위치라, 그림을 바꿔도 손댈 필요가 없다. */
-.splash-cta {
-  position: absolute;
-  left: 50%; bottom: 7%;
-  transform: translateX(-50%);
-  width: 64%; min-width: 168px;
-  min-height: 52px;
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-  border: 0; border-radius: 999px; cursor: pointer;
-  background: linear-gradient(135deg, var(--gd), var(--g));
-  color: #fff; font-weight: 800; font-size: var(--fs-sm);
-  box-shadow: 0 10px 26px rgba(20, 30, 20, .32);
-}
-.splash-cta:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
-.splash-cta:active { filter: brightness(.94); }
 
 /* 체험 안내 팝업의 예시 프로필 표 */
 .guest-profile {
