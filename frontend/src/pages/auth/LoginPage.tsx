@@ -91,8 +91,12 @@ export function LoginPage() {
     setApiResult(null);
     setPlan(fallbackPlan);
     setSearchMode("menu");
-    setQuery("시금치된장국");
-    nav("/generating");
+    setQuery("");
+    // 곧장 생성 화면으로 보내지 않는다 — 메뉴/재료/랜덤 중 아무것도 고르지 않은 채
+    // 로딩 화면부터 뜨면 "왜 이 화면이 나왔는지" 알 수 없다. 홈 화면은 로그인을
+    // 요구하지 않으므로(HomePage.tsx에 requireUser() 없음), 회원과 동일하게 직접
+    // 골라보게 한다.
+    nav("/home");
   };
   return (
     <Shell
