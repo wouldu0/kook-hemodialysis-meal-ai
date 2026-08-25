@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { BackHeader } from "../../components/layout/BackHeader";
 import { FlowFooter } from "../../components/layout/FlowFooter";
 import { Shell } from "../../components/layout/Shell";
-import { BookmarkIcon, ClipboardIcon, DocIcon } from "../../components/icons";
+import { ClipboardIcon, DocIcon } from "../../components/icons";
 import { MealSlotDialog } from "../../components/meal/MealSlotDialog";
 import { Nutrients } from "../../components/meal/Nutrients";
 import { RecipeList } from "../../components/meal/RecipeList";
@@ -14,7 +14,8 @@ import { requireUser } from "../../utils/auth";
 import { adjustedNutrition, totalNutrition } from "../../utils/nutrition";
 
 // 식사를 기록할 때 날짜와 끼니를 고르는 팝업.
-// 찜한 식단은 바로 저장하고, 식사 기록만 실제 섭취 날짜·끼니를 함께 저장한다.
+// 식단 전체(콤보) 찜은 없다 — 찜은 메뉴 단위로만 한다(RecipeList의 하트 버튼).
+// 여기서는 실제 먹은 식사를 날짜·끼니와 함께 기록(fook:history)만 한다.
 export function FinalMealPage() {
   const nav = useNavigate();
   const { plan, apiResult } = useApp();
@@ -30,35 +31,24 @@ export function FinalMealPage() {
     intake: apiResult?.intake,
     dish_ingredients: apiResult?.dish_ingredients,
   };
-  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [openRecipe, setOpenRecipe] = useState(""); // 인라인으로 펼친 레시피
   const [askJoin, setAskJoin] = useState(false); // 비회원 체험 종료 시 회원가입 안내
-  const [askSlot, setAskSlot] = useState<{ key: string; msg: string } | null>(
-    null,
-  ); // 날짜·끼니 선택 팝업
+  const [askSlot, setAskSlot] = useState(false); // 날짜·끼니 선택 팝업
 
-  const save = async (key: string, msg: string) => {
+  const save = () => {
     if (!requireUser(nav)) return;
-    if (key === "fook:history") return setAskSlot({ key, msg });
-    setSavingKey(key);
-    try {
-      await saveEverywhere(key, item);
-      alert(msg);
-    } finally {
-      setSavingKey(null);
-    }
+    setAskSlot(true);
   };
 
   const saveWithSlot = async (date: string, time: MealTime) => {
-    if (!askSlot) return;
-    const { key, msg } = askSlot;
-    setAskSlot(null);
-    setSavingKey(key);
+    setAskSlot(false);
+    setSaving(true);
     try {
-      await saveEverywhere(key, { ...item, mealDate: date, mealTime: time });
-      alert(`${date} ${time} 식사로 ${msg}`);
+      await saveEverywhere("fook:history", { ...item, mealDate: date, mealTime: time });
+      alert(`${date} ${time} 식사로 식사 기록에 추가했어요.`);
     } finally {
-      setSavingKey(null);
+      setSaving(false);
     }
   };
 
@@ -96,21 +86,10 @@ export function FinalMealPage() {
         isFallback={!apiResult}
       />
 
-      {/* 찜은 나중에 다시 볼 식단 저장, 기록은 실제 먹은 식사를 날짜·끼니와 함께 저장 */}
       <div className="final-tabs">
-        <button
-          disabled={savingKey === "fook:favorites"}
-          onClick={() => save("fook:favorites", "찜한 식단에 추가했어요.")}
-        >
-          <BookmarkIcon />
-          <span>{savingKey === "fook:favorites" ? "찜하는 중..." : "찜하기"}</span>
-        </button>
-        <button
-          disabled={savingKey === "fook:history"}
-          onClick={() => save("fook:history", "식사 기록에 추가했어요.")}
-        >
+        <button disabled={saving} onClick={save}>
           <ClipboardIcon />
-          <span>{savingKey === "fook:history" ? "기록 중..." : "기록하기"}</span>
+          <span>{saving ? "기록 중..." : "기록하기"}</span>
         </button>
         <button onClick={() => nav("/pdf")}>
           <DocIcon />
@@ -124,7 +103,7 @@ export function FinalMealPage() {
 
       {askSlot && (
         <MealSlotDialog
-          onCancel={() => setAskSlot(null)}
+          onCancel={() => setAskSlot(false)}
           onConfirm={saveWithSlot}
         />
       )}

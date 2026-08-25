@@ -28,6 +28,7 @@ import { AdjustingPage } from "./pages/meal/AdjustingPage";
 import { ComparisonPage } from "./pages/meal/ComparisonPage";
 import { FinalMealPage } from "./pages/meal/FinalMealPage";
 import { RecipePage } from "./pages/recipe/RecipePage";
+import { MenuDetailPage } from "./pages/recipe/MenuDetailPage";
 import { PdfPreviewPage } from "./pages/recipe/PdfPreviewPage";
 
 const initialProfile: Profile = {
@@ -148,6 +149,7 @@ function App() {
         <Route path="/comparison" element={<ComparisonPage />} />
         <Route path="/final" element={<FinalMealPage />} />
         <Route path="/recipe/:name" element={<RecipePage />} />
+        <Route path="/menu/:name" element={<MenuDetailPage />} />
         <Route path="/pdf" element={<PdfPreviewPage />} />
         <Route path="*" element={<Navigate to={firstRoute} replace />} />
       </Routes>

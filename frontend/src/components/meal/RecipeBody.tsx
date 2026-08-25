@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "../../hooks/useApp";
 import { useSpeech } from "../../hooks/useSpeech";
 import { generateRecipe } from "../../services/api";
 import { menuMap, parseLocalIngredient } from "../../utils/menu";
 import { fmt, fmt2, nmeta } from "../../utils/nutrition";
+import { Button } from "../layout/Button";
 import { SpeakerIcon } from "../icons";
 
 // 서버 /recipe의 steps는 배열이 아니라 '여러 줄 문자열'로 올 수 있다
@@ -25,8 +27,23 @@ export function toSteps(v: unknown): string[] {
 
 // 레시피 본문(재료 · 조리과정 · 영양성분 · 음성안내).
 // 목록에서 음식을 고르면 화면을 옮기지 않고 이 컴포넌트만 그 자리에서 펼친다.
-export function RecipeBody({ menuName }: { menuName: string }) {
-  const { apiResult, setDishSteps } = useApp();
+// showMakeMealButton: 찜한 메뉴 상세(MenuDetailPage)에서만 켠다 — 방금 생성한 식단의
+// 메뉴 목록(FinalMealPage/RecipePage)에서는 "이미 그 식단을 만든 상태"라 이 버튼이
+// 어울리지 않는다.
+export function RecipeBody({
+  menuName,
+  showMakeMealButton = false,
+}: {
+  menuName: string;
+  showMakeMealButton?: boolean;
+}) {
+  const nav = useNavigate();
+  const { apiResult, setDishSteps, setSearchMode, setQuery } = useApp();
+  const makeMealWithThisMenu = () => {
+    setSearchMode("menu");
+    setQuery(menuName);
+    nav("/generating");
+  };
   // 서버가 이 끼를 생성하며 실제로 계산한 재료(dish_ingredients)를 최우선으로 쓴다.
   // 재료 교체로 이름이 바뀐 메뉴는 recipe_source에 원래 이름이 있어 조리법은 원본 기준 조회.
   const serverIngredients: [string, number][] | undefined =
@@ -162,6 +179,11 @@ export function RecipeBody({ menuName }: { menuName: string }) {
               ? "이번 식단에 실제로 쓰인 재료·양 기준으로 계산했어요."
               : "표준 1인분 기준 예시값이에요."}
           </p>
+          {showMakeMealButton && (
+            <Button secondary onClick={makeMealWithThisMenu}>
+              이 메뉴로 새 식단 만들기
+            </Button>
+          )}
           {displaySteps.length > 0 && (
             <div className="tts-row right">
               <button

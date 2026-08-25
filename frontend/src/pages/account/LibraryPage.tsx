@@ -132,17 +132,22 @@ function SavedCard({
   showMealTime?: boolean;
 }) {
   const intake = mode === "history" && isValidIntake(item.intake) ? item.intake : undefined;
+  // 메뉴 단위 찜은 item.nutrition이 이미 NutrientKey 체계라 intakeToDisplay() 변환이 필요 없다.
+  const menuNutrition = mode === "favorites" && item.kind === "menu" ? item.nutrition : undefined;
   return (
     <article>
       <div className="saved-thumb">{mode === "documents" ? "PDF" : "KOOK"}</div>
       <button className="saved-main" onClick={() => onOpen(item)}>
         <b>{item.title}</b>
         <span>{item.subtitle}</span>
-        <small>
-          {showMealTime && item.mealTime ? `${item.mealTime} · ` : ""}
-          {new Date(itemDate(item)).toLocaleDateString("ko-KR")}
-        </small>
+        {mode !== "favorites" && (
+          <small>
+            {showMealTime && item.mealTime ? `${item.mealTime} · ` : ""}
+            {new Date(itemDate(item)).toLocaleDateString("ko-KR")}
+          </small>
+        )}
         {intake && <NutritionLine values={intakeToDisplay(intake)} />}
+        {menuNutrition && <NutritionLine values={menuNutrition} />}
       </button>
       <button className="delete-mini" onClick={() => onRemove(item.id)}>
         ×
@@ -200,16 +205,18 @@ export function LibraryPage({
 
   const meta = {
     history: ["식사 기록", "날짜별로 먹은 식사를 확인하고 다음 추천에 반영해요"],
-    favorites: ["찜한 식단", "마음에 든 식단을 모아두고 다시 볼 수 있어요"],
+    favorites: ["찜한 메뉴", "마음에 든 메뉴를 모아두고 다시 볼 수 있어요"],
     documents: ["PDF 보관함", "생성한 레시피 문서 기록"],
   }[mode];
 
   const sortedItems = useMemo(
     () =>
-      [...items].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      ),
-    [items],
+      [...items]
+        // 콤보(식단 전체) 찜은 더 이상 만들지 않는다 — 예전에 저장된 콤보 항목이 남아있어도
+        // "찜한 메뉴" 화면에는 메뉴 단위 찜만 보여준다.
+        .filter((x) => mode !== "favorites" || x.kind === "menu")
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [items, mode],
   );
 
   // 달력에 점으로 표시할, 기록이 있는 날짜 집합.
@@ -241,6 +248,10 @@ export function LibraryPage({
   };
 
   const openItem = (x: SavedItem) => {
+    if (x.kind === "menu" && x.menuName) {
+      nav(`/menu/${encodeURIComponent(x.menuName)}`);
+      return;
+    }
     if (x.menus) {
       storage.set("fook:restore", x);
       nav("/home");
@@ -348,7 +359,7 @@ export function LibraryPage({
         </>
       )}
 
-      {!loading && items.length > 0 && mode === "favorites" && (
+      {!loading && sortedItems.length > 0 && mode === "favorites" && (
         <div className="saved-list">
           {sortedItems.map((x) => (
             <SavedCard
@@ -376,21 +387,21 @@ export function LibraryPage({
         </div>
       )}
 
-      {!loading && items.length === 0 && (
+      {!loading && (mode === "favorites" ? sortedItems.length === 0 : items.length === 0) && (
         <div className="empty-state">
           <div>
             {mode === "favorites" ? "♡" : mode === "documents" ? "PDF" : "◷"}
           </div>
           <b>
             {mode === "favorites"
-              ? "아직 찜한 식단이 없어요."
+              ? "아직 찜한 메뉴가 없어요."
               : mode === "history"
                 ? "아직 기록한 식사가 없어요."
                 : "아직 기록된 항목이 없어요."}
           </b>
           <p>
             {mode === "favorites"
-              ? "마음에 드는 식단을 찜해두면 여기에서 다시 볼 수 있어요."
+              ? "마음에 드는 메뉴를 찜해두면 여기에서 다시 볼 수 있어요."
               : mode === "history"
                 ? "식단을 만든 뒤 실제 식사로 기록해보세요."
                 : "맞춤 식단을 생성한 뒤 기록해보세요."}

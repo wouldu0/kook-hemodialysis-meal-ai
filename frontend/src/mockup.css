@@ -312,6 +312,13 @@ body { background: var(--paper); }
   background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px; text-align: left;
 }
 .recipe-menu-row.active { background: #f0efe6; border-color: #dcd8cb; }
+.recipe-menu-row-wrap { display: flex; align-items: stretch; gap: 8px; }
+.recipe-menu-row-wrap .recipe-menu-row { flex: 1; min-width: 0; }
+.menu-fav-btn {
+  flex: none; width: 44px; border: 1px solid var(--line); border-radius: 14px;
+  background: #fff; display: grid; place-items: center; font-size: 19px; color: #c7c2b8;
+}
+.menu-fav-btn.on { color: var(--red); border-color: #f3c7c1; background: #fdeceb; }
 .rm-num {
   width: 34px; height: 34px; border-radius: 50%; background: var(--gs); color: var(--gd);
   display: grid; place-items: center; font-size: 14px; font-weight: 800;
@@ -415,7 +422,7 @@ body { background: var(--paper); }
 .ba-note { margin: 9px 0 0; font-size: 11px; color: var(--muted); }
 
 /* 완성 화면 하단 3탭 */
-.final-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 16px 0 4px; }
+.final-tabs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 16px 0 4px; }
 .final-tabs button {
   display: grid; justify-items: center; gap: 7px; min-height: 74px;
   border: 1px solid var(--line); background: #fff; border-radius: 15px;

@@ -70,7 +70,7 @@ export function AccountPage() {
       </div>
       <div className="menu-list">
         <button onClick={() => nav("/favorites")}>
-          <span>찜한 식단</span>
+          <span>찜한 메뉴</span>
           <i>›</i>
         </button>
         <button onClick={() => nav("/documents")}>

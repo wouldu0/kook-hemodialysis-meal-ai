@@ -54,6 +54,12 @@ export type SavedItem = {
   raw_menus?: ApiResult["raw_menus"];
   intake?: ApiResult["intake"];
   dish_ingredients?: ApiResult["dish_ingredients"];
+  // kind가 없으면(기존 데이터 포함) 식단 콤보 찜 — "meal"과 동일하게 취급한다.
+  // "menu"면 메뉴 하나만 찜한 것으로, menus/mealTime/intake 등 콤보 전용 필드는 안 쓰고
+  // menuName + 그 메뉴 하나의 영양(nutrition)만 쓴다.
+  kind?: "meal" | "menu";
+  menuName?: string;
+  nutrition?: Record<NutrientKey, number>;
 };
 
 // backend/app_core_FOOK.py의 meal_result()가 실제로 내려주는 응답 형태.
