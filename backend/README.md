@@ -11,6 +11,7 @@
 | `GET /menus`, `/ingredients` | 메뉴·재료 목록 |
 | `POST /generate` | 한 끼 식단 생성 (AI 엔진 + 영양 레버) |
 | `POST /generate_day` | 하루 세 끼 연속 생성 |
+| `POST /day_targets` | 메뉴 생성 없이 개인별 하루 영양 목표 범위 계산 |
 | `POST /recipe` | 조리법 LLM 편집 |
 | `POST /tts` | 조리법 음성 변환 |
 | `POST /chat` | 투석·콩팥병 영양 RAG 챗봇 (근거 자료 기반 질의응답 + 멀티턴 음식 후속 질문) |
