@@ -18,7 +18,7 @@ import { adjustedNutrition, totalNutrition } from "../../utils/nutrition";
 // 여기서는 실제 먹은 식사를 날짜·끼니와 함께 기록(fook:history)만 한다.
 export function FinalMealPage() {
   const nav = useNavigate();
-  const { plan, apiResult } = useApp();
+  const { plan, apiResult, setQuery, setSearchMode } = useApp();
   const item = {
     id: `meal-${Date.now()}`,
     title: plan.menus[1] || "맞춤 한 끼",
@@ -55,6 +55,14 @@ export function FinalMealPage() {
   const finalValues =
     apiResult?.nutrition || adjustedNutrition(totalNutrition(plan));
 
+  // "완료"로 홈에 돌아갈 땐 이번에 검색/선택했던 메뉴·재료가 다음 방문에도 남아있지
+  // 않게 비워준다 — 로그인 직후(submit())·비회원 체험 시작(tryGuest())과 같은 처리다.
+  const finish = () => {
+    setQuery("");
+    setSearchMode("menu");
+    nav("/home");
+  };
+
   return (
     <Shell
       header={false}
@@ -64,7 +72,7 @@ export function FinalMealPage() {
           total={5}
           onPrev={() => nav("/comparison")}
           // 비회원 체험이면 여기서 끝내지 않고 회원가입 안내를 먼저 띄운다.
-          onNext={() => (currentUser() ? nav("/home") : setAskJoin(true))}
+          onNext={() => (currentUser() ? finish() : setAskJoin(true))}
           nextLabel="완료"
         />
       }
