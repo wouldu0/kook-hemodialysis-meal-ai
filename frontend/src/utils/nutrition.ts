@@ -92,6 +92,21 @@ export function minTargetOf(targets: any, key: NutrientKey): number {
   return 0;
 }
 
+// 나트륨은 서버가 의미가 다른 두 값을 함께 내려준다 — sodium(첨가염, Na_season)과
+// sodium_total/sodium_total_target(총나트륨, Na). 화면에 "나트륨"으로 보여줄 땐 항상
+// 총나트륨을 우선한다(2026-08 나트륨 표시 기준 재정리 — 첨가염만 보여주면 사용자가
+// 총나트륨으로 오해할 수 있어서). 그 필드가 없는 값(정적 메뉴 DB처럼 구분이 없는 값)은
+// 원래 있는 값을 그대로 쓴다.
+export function displayValue(values: any, key: NutrientKey): number {
+  if (key === "sodium" && values?.sodium_total != null) return Number(values.sodium_total);
+  return Number(values?.[key] ?? 0);
+}
+export function displayTarget(targets: any, key: NutrientKey): number {
+  if (key === "sodium" && targets?.sodium_total_target != null)
+    return Number(targets.sodium_total_target);
+  return targetOf(targets, key);
+}
+
 // 영양소 하나의 상태를 판정한다. lo가 0이면(칼륨·인·나트륨) 상한만 본다.
 export type NStatus = "미만" | "적절" | "초과";
 export function statusOf(v: number, lo: number, hi: number): NStatus {

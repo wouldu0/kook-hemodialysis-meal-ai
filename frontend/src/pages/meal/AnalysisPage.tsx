@@ -5,7 +5,7 @@ import { DocIcon, RefreshIcon } from "../../components/icons";
 import { Nutrients } from "../../components/meal/Nutrients";
 import { NutrientIconRow } from "../../components/meal/NutrientIconRow";
 import { useApp } from "../../hooks/useApp";
-import { minTargetOf, nmeta, targetOf, totalNutrition } from "../../utils/nutrition";
+import { displayTarget, displayValue, minTargetOf, nmeta, totalNutrition } from "../../utils/nutrition";
 
 export function AnalysisPage() {
   const nav = useNavigate();
@@ -18,8 +18,8 @@ export function AnalysisPage() {
   // 게이지(Nutrients)와 동일한 기준: 상한 초과뿐 아니라 하한 미달도 '조정 필요'로 본다.
   // (에너지·단백질은 서버가 [최소,최대] 범위를 주므로 미달도 실제로 의미가 있다.)
   const over = nmeta.filter((n) => {
-    const v = raw[n.key];
-    const hi = targetOf(targets, n.key);
+    const v = displayValue(raw, n.key);
+    const hi = displayTarget(targets, n.key);
     const lo = minTargetOf(targets, n.key);
     return v > hi || (lo > 0 && v < lo);
   });

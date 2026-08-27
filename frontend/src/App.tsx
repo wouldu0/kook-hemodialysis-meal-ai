@@ -16,6 +16,7 @@ import { FindPasswordPage } from "./pages/auth/FindPasswordPage";
 import { SignupPage } from "./pages/auth/SignupPage";
 import { ProfileSetupPage } from "./pages/auth/ProfileSetupPage";
 import { AccountPage } from "./pages/account/AccountPage";
+import { NutritionTargetsPage } from "./pages/account/NutritionTargetsPage";
 import { LibraryPage } from "./pages/account/LibraryPage";
 import { TipsPage } from "./pages/account/TipsPage";
 import { ChatPage } from "./pages/account/ChatPage";
@@ -139,6 +140,7 @@ function App() {
         <Route path="/tips" element={<TipsPage />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/account" element={<AccountPage />} />
+        <Route path="/nutrition-targets" element={<NutritionTargetsPage />} />
         <Route path="/history" element={<LibraryPage mode="history" />} />
         <Route path="/favorites" element={<LibraryPage mode="favorites" />} />
         <Route path="/documents" element={<LibraryPage mode="documents" />} />

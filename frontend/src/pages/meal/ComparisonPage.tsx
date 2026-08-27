@@ -6,13 +6,14 @@ import { CheckIcon, DocIcon } from "../../components/icons";
 import { useApp } from "../../hooks/useApp";
 import {
   adjustedNutrition,
+  displayTarget,
+  displayValue,
   fmt,
   minTargetOf,
   nmeta,
   parseChange,
   STATUS_CLASS,
   statusOf,
-  targetOf,
   totalNutrition,
 } from "../../utils/nutrition";
 
@@ -218,9 +219,9 @@ export function ComparisonPage() {
         </div>
         <div className="ba-list">
           {nmeta.map((n) => {
-            const b = Number(before?.[n.key] ?? 0);
-            const a = Number(after?.[n.key] ?? 0);
-            const hi = targetOf(apiResult?.targets, n.key);
+            const b = displayValue(before, n.key);
+            const a = displayValue(after, n.key);
+            const hi = displayTarget(apiResult?.targets, n.key);
             const lo = minTargetOf(apiResult?.targets, n.key);
             const aStatus = statusOf(a, lo, hi);
             const diff = a - b;

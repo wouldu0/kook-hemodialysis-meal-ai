@@ -17,13 +17,14 @@ import { useApp } from "../../hooks/useApp";
 import type { SavedItem } from "../../types";
 import { MEAL_TIMES, todayISO } from "../../utils/date";
 import {
+  displayTarget,
+  displayValue,
   fmt,
   intakeToDisplay,
   minTargetOf,
   nmeta,
   STATUS_CLASS,
   statusOf,
-  targetOf,
 } from "../../utils/nutrition";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
@@ -91,9 +92,9 @@ function DayProgress({
   return (
     <div className="day-progress">
       {nmeta.map((n) => {
-        const hi = targetOf(targets, n.key);
+        const hi = displayTarget(targets, n.key);
         const lo = minTargetOf(targets, n.key);
-        const v = values[n.key] ?? 0;
+        const v = displayValue(values, n.key);
         // 막대 너비는 트랙을 벗어날 수 없어 100%에서 자르지만, 옆 숫자는 실제 초과분이
         // 보이도록 그대로 둔다 — "100%"만 보이면 얼마나 넘었는지 알 수 없다.
         const rawPct = hi > 0 ? Math.round((v / hi) * 100) : 0;
@@ -178,6 +179,9 @@ export function LibraryPage({
     if (profile.height) {
       body.height = Number(profile.height);
       body.sex = profile.gender === "남성" ? "남" : "여";
+    }
+    if (profile.customTargets && Object.keys(profile.customTargets).length > 0) {
+      body.custom_targets = profile.customTargets;
     }
     // 실패해도(오프라인 등) 그냥 원래대로 숫자만 보여준다 — 기준 없이 %를 지어내지 않는다.
     fetchDayTargets(body)

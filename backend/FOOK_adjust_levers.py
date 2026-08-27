@@ -1366,24 +1366,61 @@ def standard_weight(height_cm, sex):
     return h * h * (21 if female else 22)
 
 
-def day_targets(weight):
-    # 하루 기준. weight는 '표준체중'(standard_weight)을 넣는다.
-    # 칼륨·인은 '미만'(<) 기준 — day_ok/passes에서 < 로 판정. 나트륨은 조미료 끼니고정(소금1g x 3).
-    return {'Elo': weight * 30, 'Ehi': weight * 35,
-            'Plo': weight * 1.1, 'Phi': weight * 1.2,
-            'Kmax': 3000, 'Pmax': 1000, 'Namax': SALT_MG * 3}
+def day_targets(weight, overrides=None):
+    """하루 기준. weight는 '표준체중'(standard_weight)을 넣는다.
+    칼륨·인은 '미만'(<) 기준 — day_ok/passes에서 < 로 판정.
+
+    나트륨은 의미가 다른 두 값이 함께 있다 — 하나로 합치면 안 됨(2026-08 재검토):
+      Namax        : 조미료(첨가염, Na_season)의 내부 guardrail. 항상 SALT_MG*3 고정.
+                     passes()/lever_sodium()이 보는 기준이고, 사용자가 직접 조정하는 대상이 아니다
+                     (맛 보존 하한이 있어 예산화 의미가 없다는 게 원래 설계 의도).
+      Na_total_max : 자연재료까지 포함한 총 나트륨(Na)의 하루 목표. 화면에 "나트륨"으로 보여주고
+                     사용자가 override하는 게 바로 이 값이다. 기본값은 기존 meal_bounds()가 써오던
+                     NA_TOTAL_MEAL*3(=1965)와 정확히 같아, override 없으면 결과가 그대로다.
+
+    overrides: {'energy':[lo,hi], 'protein':[lo,hi], 'potassium':num, 'phosphorus':num, 'sodium':num}
+    형태(server_FOOK.CustomTargets와 동일 모양). sodium은 여기서 Na_total_max만 바꾸고 Namax는
+    절대 건드리지 않는다 — 첨가염 안전장치를 느슨하게 만드는 값이 아니라 총 나트륨 목표이기 때문.
+    값이 없는 항목은 그대로 자동 산출값을 쓴다.
+
+    d['custom_sodium_active']: 사용자가 sodium(총나트륨)을 직접 설정했는지 여부를 값이 아니라
+    명시적 bool로 들고 다닌다(2026-08). 예: 자동 산출값이 우연히 1965와 같은 사용자가 있을 수
+    있어 "Na_total_max != 기본값"으로는 override 여부를 구분할 수 없다 — 계산 체인 끝까지
+    (meal_bounds→passes/day_ok) 이 flag를 그대로 넘겨서 "custom sodium이 있으면만 총나트륨을
+    추가 hard constraint로 본다"는 판정을 값 비교가 아니라 이 flag로 결정한다."""
+    d = {'Elo': weight * 30, 'Ehi': weight * 35,
+         'Plo': weight * 1.1, 'Phi': weight * 1.2,
+         'Kmax': 3000, 'Pmax': 1000,
+         'Namax': SALT_MG * 3,
+         'Na_total_max': NA_TOTAL_MEAL * 3,
+         'custom_sodium_active': False}
+    if overrides:
+        if overrides.get('energy'):
+            d['Elo'], d['Ehi'] = overrides['energy']
+        if overrides.get('protein'):
+            d['Plo'], d['Phi'] = overrides['protein']
+        if overrides.get('potassium') is not None:
+            d['Kmax'] = overrides['potassium']
+        if overrides.get('phosphorus') is not None:
+            d['Pmax'] = overrides['phosphorus']
+        if overrides.get('sodium') is not None:
+            d['Na_total_max'] = overrides['sodium']
+            d['custom_sodium_active'] = True
+    return d
 
 
-def meal_bounds(weight, consumed=None, meals_left=3, total_meals=3, tol=0.2):
+def meal_bounds(weight, consumed=None, meals_left=3, total_meals=3, tol=0.2, overrides=None):
     """남은 예산 + 균형 밴드 방식. 한 끼 목표 반환.
     consumed   : 오늘 이미 먹은 누적 {'E','protein','K','P','Na'} (첫 끼면 None)
     meals_left : 이번 끼 포함 남은 끼니 수 (아침=3, 점심=2, 저녁=1)
     tol        : 1일÷3 대비 허용 편차(몰아먹기 방지 밴드). 0.2 = ±20%
+    overrides  : day_targets() 참고 — 여기 그대로 전달만 한다.
     나트륨: 첨가염(Namax)은 끼니 고정 393mg — 조미료는 맛 보존 하한이 있어 예산화 의미 없음.
-    단, 총나트륨(자연재료 포함)은 Na_total_target로 남은예산÷남은끼니 이월(K·P와 동일 cap() 방식).
+    override와 무관하게 항상 고정이다. 총나트륨(자연재료 포함)은 Na_total_target로 남은예산÷남은끼니
+    이월(K·P와 동일 cap() 방식) — day_targets()의 Na_total_max(override 반영)를 기준으로 계산한다.
     앞 끼에 미역국 등으로 자연나트륨을 많이 먹었으면 다음 끼 목표가 빡빡해져 lever_sodium_extra가 더 세게 줄인다.
     """
-    d = day_targets(weight)
+    d = day_targets(weight, overrides)
     c = consumed or {'E': 0, 'protein': 0, 'K': 0, 'P': 0, 'Na': 0}
     n = max(1, meals_left)
 
@@ -1401,8 +1438,10 @@ def meal_bounds(weight, consumed=None, meals_left=3, total_meals=3, tol=0.2):
             # 인(P)은 raw P가 하드 기준(passes()와 동일) — 남은 예산도 반드시 raw P로 이월한다.
             # Peff(흡수보정 인)는 최적화용 소프트 신호일 뿐 예산·상한 판정에는 쓰지 않는다.
             'Pmax': cap(d['Pmax'], c.get('P', 0)),
-            'Namax': SALT_MG,   # 나트륨 끼니 고정 = 조미료 소금 1g (자연염 제외)
-            'Na_total_target': cap(NA_TOTAL_MEAL * total_meals, c.get('Na', 0))}   # 총나트륨 남은예산
+            'Namax': SALT_MG,   # 나트륨(첨가염) 끼니 고정 = 조미료 소금 1g — override 무관, 항상 고정
+            'Na_total_target': cap(d['Na_total_max'], c.get('Na', 0)),   # 총나트륨 남은예산(override 반영)
+            # passes()가 총나트륨을 추가 hard constraint로 볼지 결정하는 명시적 flag(값 비교 아님).
+            'custom_sodium_active': d['custom_sodium_active']}
 
 
 def main():

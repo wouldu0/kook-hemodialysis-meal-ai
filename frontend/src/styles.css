@@ -200,7 +200,7 @@ body{font-size:16px}
 .field{border-width:1px;border-radius:13px;padding:0 13px}
 .field input{height:50px;font-size:16px}
 .field span{font-size:15px}
-.field-hint{font-size:12px;line-height:1.45;margin-top:0}
+.field-hint{font-size:12px;line-height:1.45;margin-top:0}.field-reset{justify-self:start;border:0;background:none;color:var(--g);font-size:12px;font-weight:700;padding:0;margin-top:-2px}
 .segment{min-height:50px;font-size:15px;border-width:1px}
 .check-row input{width:22px;height:22px}
 .check-row b{font-size:14px}

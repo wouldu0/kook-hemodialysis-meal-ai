@@ -1,5 +1,16 @@
 // 앱 전역에서 쓰는 타입 모음.
 
+// 의료진·영양사에게 별도로 안내받은 개인별 영양 기준(선택). 항목별로 값이 있으면
+// 성별·키 기반 자동 산출값 대신 이 값을 쓴다. 백엔드 schemas.CustomTargets와 같은 모양 —
+// 열량·단백질은 [최소,최대] 범위, 칼륨·인·나트륨(총나트륨, Na 기준)은 하루 상한 하나.
+export type CustomTargets = {
+  energy?: [number, number];
+  protein?: [number, number];
+  potassium?: number;
+  phosphorus?: number;
+  sodium?: number;
+};
+
 export type Profile = {
   gender: string;
   birthdate: string; // YYYY-MM-DD. age는 여기서 계산해서 화면에만 보여준다.
@@ -7,6 +18,7 @@ export type Profile = {
   height: string;
   weight: string;
   dialysis: "혈액투석";
+  customTargets?: CustomTargets;
 };
 
 export type MenuRecord = {
@@ -86,7 +98,10 @@ export interface ApiResult {
     protein: [number, number];
     potassium: number;
     phosphorus: number;
+    // sodium은 첨가염(Na_season) 상한 — 기존 필드, 그대로 둔다.
     sodium: number;
+    // 총나트륨(Na 기준) 목표 — 화면에 "나트륨"으로 보여줄 땐 이 값을 쓴다(2026-08 나트륨 재설계).
+    sodium_total_target?: number;
   };
   passed?: boolean;
   note?: string;

@@ -1,10 +1,11 @@
 import {
+  displayTarget,
+  displayValue,
   fmt,
   minTargetOf,
   nmeta,
   STATUS_CLASS,
   statusOf,
-  targetOf,
   totalNutrition,
 } from "../../utils/nutrition";
 
@@ -26,8 +27,8 @@ export function Nutrients({
   return (
     <div className="nutri-list">
       {nmeta.map((n) => {
-        const v = Number(values?.[n.key] || 0);
-        const hi = targetOf(targets, n.key);
+        const v = displayValue(values, n.key);
+        const hi = displayTarget(targets, n.key);
         const lo = minTargetOf(targets, n.key);
         const status = statusOf(v, lo, hi);
         const cls = isFallback ? "demo" : STATUS_CLASS[status];

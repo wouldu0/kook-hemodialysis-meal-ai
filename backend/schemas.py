@@ -50,6 +50,51 @@ class ResetPasswordReq(BaseModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
+# 의료진·영양사에게 별도로 안내받은 개인별 영양 기준. 항목별로 값이 있으면 성별·키
+# 기반 자동 산출값(F.day_targets) 대신 이 값을 쓰고, 없는(None) 항목은 그대로 자동
+# 산출값을 쓴다 — "일부만 override" 구조. 열량·단백질은 [최소,최대] 범위, 칼륨·인·
+# 나트륨(첨가염)은 상한 하나다 — 화면에 이미 보여주는 targets/day_targets 응답과
+# 정확히 같은 모양이라 그대로 되돌려 보여줄 수 있다.
+class CustomTargets(BaseModel):
+    energy: Optional[list[float]] = None
+    protein: Optional[list[float]] = None
+    potassium: Optional[float] = Field(default=None, gt=0, le=10000)
+    phosphorus: Optional[float] = Field(default=None, gt=0, le=10000)
+    sodium: Optional[float] = Field(default=None, gt=0, le=10000)
+
+    # bool은 파이썬에서 int의 서브타입이라(True==1) pydantic이 기본적으로 float로 조용히
+    # 받아준다 — {"potassium": true}가 "1mg 상한"으로 저장되는 걸 막는다.
+    @field_validator('potassium', 'phosphorus', 'sodium', mode='before')
+    @classmethod
+    def _reject_bool_scalar(cls, v):
+        if isinstance(v, bool):
+            raise ValueError('숫자여야 합니다.')
+        return v
+
+    @field_validator('energy', 'protein', mode='before')
+    @classmethod
+    def _reject_bool_in_range(cls, v):
+        if isinstance(v, list) and any(isinstance(x, bool) for x in v):
+            raise ValueError('숫자여야 합니다.')
+        return v
+
+    @field_validator('energy', 'protein')
+    @classmethod
+    def _valid_range(cls, v):
+        if v is None:
+            return v
+        if len(v) != 2:
+            raise ValueError('[최소, 최대] 형태로 값 2개를 보내야 합니다.')
+        lo, hi = v
+        if lo <= 0 or hi <= 0:
+            raise ValueError('0보다 큰 값이어야 합니다.')
+        if lo > hi:
+            raise ValueError('최소값이 최대값보다 클 수 없습니다.')
+        if hi > 10000:
+            raise ValueError('비정상적으로 큰 값입니다.')
+        return [float(lo), float(hi)]
+
+
 class ProfileReq(BaseModel):
     gender: Optional[str] = None
     # 생년월일(YYYY-MM-DD)을 받아 서버에서 나이를 계산해 DB의 age 컬럼에 저장한다.
@@ -59,6 +104,10 @@ class ProfileReq(BaseModel):
     height: Optional[float] = Field(default=None, ge=50, le=250)
     weight: Optional[float] = Field(default=None, ge=20, le=300)
     dialysis: str = '혈액투석'
+    # 항상 프로필 전체를 다시 저장하는 구조라, 여기 안 보내면(None) 저장돼 있던 기존
+    # custom_targets도 그대로 지워진다 — 프론트는 이 화면(기본정보 수정)에서도 항상
+    # 현재 custom_targets 값을 함께 보내 실수로 지우지 않게 한다(ProfileSetupPage 참고).
+    custom_targets: Optional[CustomTargets] = None
 
     def computed_age(self) -> Optional[int]:
         if self.birthdate:
@@ -112,12 +161,16 @@ class GenReq(HeightSexMixin):
     # 오늘 이미 나온 메뉴 목록(하루 중복 방지). day_result가 끼니마다 누적해서 넘기는 것과
     # 같은 개념을, 프론트가 오늘 실제로 기록한 식사 이력(raw_menus)으로부터 만들어 보낸다.
     used_today: Optional[list[str]] = None
+    # 의료진 안내값으로 자동 산출값을 부분 override — 없으면(None) 기존과 완전히 동일하게
+    # 동작한다(하위호환). 프론트는 로그인 시 프로필에서 읽어온 값을 매 생성 요청마다 실어 보낸다.
+    custom_targets: Optional[CustomTargets] = None
 
 
 class DayReq(HeightSexMixin):
     weight: int = Field(default=60, ge=20, le=300)  # ProfileReq.weight와 동일 범위 — 위 GenReq.weight 주석 참고
     menus: Optional[list] = None
     ingredients: Optional[list] = None
+    custom_targets: Optional[CustomTargets] = None
 
     # day_result()는 menus[mi]/ingredients[mi]를 mi=0..2로 바로 인덱싱한다(하루 세 끼 고정).
     # 길이가 1~2(또는 4+)면 IndexError로 500이 나므로, 여기서 미리 422로 막는다.
@@ -133,6 +186,7 @@ class DayReq(HeightSexMixin):
 
 class DayTargetsReq(HeightSexMixin):
     weight: int = Field(default=60, ge=20, le=300)  # ProfileReq.weight와 동일 범위 — 위 GenReq.weight 주석 참고
+    custom_targets: Optional[CustomTargets] = None
 
 
 class RecipeReq(BaseModel):

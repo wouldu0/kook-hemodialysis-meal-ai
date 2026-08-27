@@ -30,6 +30,10 @@ export function ProfileSetupPage() {
           height: Number(draft.height),
           weight: Number(draft.weight),
           dialysis: draft.dialysis,
+          // 이 화면은 기본 정보(키·몸무게 등)만 다루지만, 저장 API는 프로필 전체를
+          // 다시 쓰는 구조라 여기서 안 보내면 "영양 기준 설정"에서 저장해둔 custom_targets가
+          // 그대로 지워진다. 이 화면에서 손대지 않은 값이니 항상 현재 값을 그대로 함께 보낸다.
+          customTargets: draft.customTargets,
         });
       const withAge = { ...draft, age: String(computedAge ?? draft.age) };
       setProfile(withAge);

@@ -52,6 +52,10 @@ export function GeneratingPage() {
       if (searchMode === "menu" && query.trim()) body.menu = query.trim();
       if (searchMode === "ingredient" && query.trim())
         body.ingredient = query.trim();
+      // 의료진 안내값으로 프로필에 저장해둔 개인 기준(있으면)을 이번 생성에도 그대로 반영한다.
+      if (profile.customTargets && Object.keys(profile.customTargets).length > 0) {
+        body.custom_targets = profile.customTargets;
+      }
 
       try {
         // Render Free가 잠든 상태라면 /generate부터 보내지 않고, 앱 진입 때 시작된 동일

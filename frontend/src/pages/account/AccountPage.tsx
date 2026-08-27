@@ -26,6 +26,7 @@ export function AccountPage() {
           height: p.height_cm != null ? String(p.height_cm) : profile.height,
           weight: p.weight_kg != null ? String(p.weight_kg) : profile.weight,
           dialysis: p.dialysis_type || profile.dialysis,
+          customTargets: p.custom_targets || profile.customTargets,
         });
       })
       .catch(() => {});
@@ -69,6 +70,10 @@ export function AccountPage() {
         </div>
       </div>
       <div className="menu-list">
+        <button onClick={() => nav("/nutrition-targets")}>
+          <span>영양 기준 설정</span>
+          <i>›</i>
+        </button>
         <button onClick={() => nav("/favorites")}>
           <span>찜한 메뉴</span>
           <i>›</i>

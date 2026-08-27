@@ -25,6 +25,9 @@ export function DayPlanPage() {
       body.height = Number(profile.height);
       body.sex = profile.gender === "남성" ? "남" : "여";
     }
+    if (profile.customTargets && Object.keys(profile.customTargets).length > 0) {
+      body.custom_targets = profile.customTargets;
+    }
     generateDayPlan(body)
       .then((d) => live && setData(d))
       .catch(() => live && setError("서버에 연결하지 못했어요. 백엔드가 켜져 있는지 확인해주세요."))

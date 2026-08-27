@@ -4,7 +4,7 @@ import { useApp } from "../../hooks/useApp";
 import { useSpeech } from "../../hooks/useSpeech";
 import { generateRecipe } from "../../services/api";
 import { menuMap, parseLocalIngredient } from "../../utils/menu";
-import { fmt, fmt2, nmeta } from "../../utils/nutrition";
+import { displayValue, fmt, fmt2, nmeta } from "../../utils/nutrition";
 import { Button } from "../layout/Button";
 import { SpeakerIcon } from "../icons";
 
@@ -168,7 +168,7 @@ export function RecipeBody({
                 <span>{n.icon}</span>
                 <small>{n.label}</small>
                 <b>
-                  {fmt(Number((nutrition as any)?.[n.key] || 0))}
+                  {fmt(displayValue(nutrition, n.key))}
                   <i>{n.unit}</i>
                 </b>
               </div>

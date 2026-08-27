@@ -367,8 +367,14 @@ gen_batch(n=2)
 def passes(t, b):
     # 인(P)은 실제 섭취 인(raw P, 하드 기준)으로 판정한다 — 흡수보정 인(Peff, FOOK_adjust_levers.py
     # 참고)은 대체재 선호도 등 최적화용 소프트 신호일 뿐, 여기서(최종 통과/실패)는 쓰지 않는다.
-    return (b['Elo'] <= t['E'] <= b['Ehi'] and b['Plo'] <= t['protein'] <= b['Phi'] and
-            t['K'] < b['Kmax'] and t['P'] < b['Pmax'] and t['Na_season'] <= b['Namax'])
+    ok = (b['Elo'] <= t['E'] <= b['Ehi'] and b['Plo'] <= t['protein'] <= b['Phi'] and
+          t['K'] < b['Kmax'] and t['P'] < b['Pmax'] and t['Na_season'] <= b['Namax'])
+    # custom sodium(총나트륨 하루 상한)을 설정한 사용자만 총나트륨도 추가 hard constraint로 본다
+    # (첨가염 조건은 그대로 유지 + AND). custom 없는 사용자는 이 분기를 아예 안 타서 위 결과
+    # 그대로다 — b['custom_sodium_active']는 값(1965 등) 비교가 아니라 명시적 flag로 판단한다.
+    if b.get('custom_sodium_active'):
+        ok = ok and t['Na'] <= b['Na_total_target']
+    return ok
 
 
 def _total_na_warning(after):
@@ -528,16 +534,21 @@ def _changes(menus, inst):
 
 
 def meal_result(menu=None, ingredient=None, weight=60, consumed=None, meals_left=3,
-                height=None, sex=None, used_today=None):
+                height=None, sex=None, used_today=None, custom_targets=None):
     """API용: 완성 한끼를 JSON-able dict로.
     consumed = 오늘 이미 먹은 누적 영양(첫 끼면 None), meals_left = 이번 끼 포함 남은 끼니 수.
     둘을 주면 '남은 예산 ÷ 남은 끼니'로 이 끼의 목표를 잡는다(하루를 이어서 만들 때).
     height(cm)+sex를 주면 영양 목표를 '표준체중'(키²×22/21) 기준으로 잡는다(임상 지침).
     height가 없으면 weight를 표준체중으로 간주해 그대로 쓴다.
-    used_today = 오늘 이미 나온 메뉴 집합(하루 중복 방지). day_result가 끼니마다 누적해서 넘긴다."""
+    used_today = 오늘 이미 나온 메뉴 집합(하루 중복 방지). day_result가 끼니마다 누적해서 넘긴다.
+    custom_targets = 의료진 안내값으로 자동 산출값을 부분 override(FOOK_adjust_levers.day_targets
+    참고). None이면 기존과 완전히 동일하게 동작한다."""
     if height is not None:
         weight = F.standard_weight(height, sex)
-    bounds = F.meal_bounds(weight, consumed, meals_left=meals_left) if consumed is not None else None
+    # consumed가 없어도(첫 끼) 항상 여기서 bounds를 만든다 — make_meal(bounds=None)이 쓰는
+    # 내부 기본값(F.meal_bounds(W))과 결과가 같아 동작은 그대로면서, custom_targets를
+    # 놓치지 않고 흘려보낼 수 있다(전에는 None을 넘겨 make_meal 내부 기본값에 맡겼었음).
+    bounds = F.meal_bounds(weight, consumed, meals_left=meals_left, overrides=custom_targets)
     cand, note, b, anchor, warn = make_meal(menu=menu, ingredient=ingredient, W=weight, bounds=bounds,
                                              used_today=used_today)
     menus, inst, after, ok, before = cand
@@ -594,7 +605,8 @@ def meal_result(menu=None, ingredient=None, weight=60, consumed=None, meals_left
         'targets': {'energy': [round(b['Elo']), round(b['Ehi'])],
                     'protein': [round(b['Plo'], 1), round(b['Phi'], 1)],
                     'potassium': round(b['Kmax']), 'phosphorus': round(b['Pmax']),
-                    'sodium': round(b['Namax'])},
+                    'sodium': round(b['Namax']),                    # 조미료(첨가염) 상한 — 기존과 동일
+                    'sodium_total_target': round(b['Na_total_target'])},  # 총나트륨 목표(신규, custom 반영)
         'passed': bool(ok),
         'note': note.strip(),      # 안내문(재료→메뉴 선택 결과, 잡곡밥→흰쌀밥 대체 사유 등)
         'warning': warn,
@@ -611,25 +623,28 @@ def meal_result(menu=None, ingredient=None, weight=60, consumed=None, meals_left
 MEAL_LABELS = ('아침', '점심', '저녁')
 
 
-def day_targets_only(weight=60, height=None, sex=None):
+def day_targets_only(weight=60, height=None, sex=None, custom_targets=None):
     """메뉴 생성 없이 하루 전체 영양 기준만 계산해서 반환한다.
     day_result()의 day_targets와 계산식은 같지만, 후보 생성(make_meal)을 전혀 돌리지 않아
-    훨씬 가볍다 — 식사 기록 화면에서 '오늘 얼마나 채웠는지' 진행률을 보여줄 때 쓴다."""
+    훨씬 가볍다 — 식사 기록 화면에서 '오늘 얼마나 채웠는지' 진행률을 보여줄 때 쓴다.
+    custom_targets: 의료진 안내값 부분 override(F.day_targets 참고). None이면 기존과 동일."""
     if height is not None:
         weight = F.standard_weight(height, sex)
-    d = F.day_targets(weight)
+    d = F.day_targets(weight, custom_targets)
     return {'energy': [round(d['Elo']), round(d['Ehi'])],
             'protein': [round(d['Plo'], 1), round(d['Phi'], 1)],
             'potassium': round(d['Kmax']),
             'phosphorus': round(d['Pmax']),
-            'sodium': round(d['Namax'])}
+            'sodium': round(d['Namax']),                    # 조미료(첨가염) 상한 — 기존과 동일
+            'sodium_total_target': round(d['Na_total_max'])}  # 총나트륨 하루 목표(신규, custom 반영)
 
 
-def day_result(weight=60, menus=None, ingredients=None, height=None, sex=None):
+def day_result(weight=60, menus=None, ingredients=None, height=None, sex=None, custom_targets=None):
     """하루 세 끼를 '남은 예산' 방식으로 이어서 생성.
     앞 끼에서 먹은 양을 빼고 남은 끼니로 나눠 다음 끼 목표를 잡으므로, 한 끼씩 따로 만들 때와 달리
     하루 총량이 기준 안에 들어온다. menus/ingredients = 끼니별 지정(길이 3, None이면 랜덤).
-    height(cm)+sex를 주면 표준체중 기준으로 목표를 잡는다."""
+    height(cm)+sex를 주면 표준체중 기준으로 목표를 잡는다.
+    custom_targets: 의료진 안내값 부분 override — 끼니마다 그대로 이어서 넘긴다."""
     if height is not None:
         weight = F.standard_weight(height, sex)
     menus = list(menus) if menus else [None] * 3
@@ -639,18 +654,24 @@ def day_result(weight=60, menus=None, ingredients=None, height=None, sex=None):
     out = []
     for mi in range(3):
         r = meal_result(menu=menus[mi], ingredient=ingredients[mi], weight=weight,
-                        consumed=consumed, meals_left=3 - mi, used_today=used_today)
+                        consumed=consumed, meals_left=3 - mi, used_today=used_today,
+                        custom_targets=custom_targets)
         for k in consumed:
             consumed[k] = round(consumed[k] + r['intake'][k], 4)   # 부동소수점 누적오차 방지(방법2)
         used_today.update(r['raw_menus'])
         r['label'] = MEAL_LABELS[mi]
         out.append(r)
-    dt = F.day_targets(weight)
+    dt = F.day_targets(weight, custom_targets)
     EPS = 1e-6   # 부동소수점 누적오차 허용오차(방법1) — 1799.9999999998 같은 값이 미달로 오판되는 것 방지
+    # 하루 통과 판정은 기본적으로 첨가염(Na_season) 기준 그대로다 — custom sodium이 없는 사용자는
+    # 이 줄이 예전과 완전히 동일하다. custom sodium을 설정한 사용자만(dt['custom_sodium_active'])
+    # 총나트륨(Na <= Na_total_max)도 추가로 만족해야 day_passed=True가 된다(passes()와 같은 원칙).
     day_ok = (dt['Elo'] - EPS <= consumed['E'] <= dt['Ehi'] + EPS
               and dt['Plo'] - EPS <= consumed['protein'] <= dt['Phi'] + EPS
               and consumed['K'] < dt['Kmax'] + EPS and consumed['P'] < dt['Pmax'] + EPS
               and consumed['Na_season'] <= dt['Namax'] + EPS)
+    if dt.get('custom_sodium_active'):
+        day_ok = day_ok and consumed['Na'] <= dt['Na_total_max'] + EPS
     return {
         'meals': out,
         'day_nutrition': {'energy': round(consumed['E']), 'protein': round(consumed['protein'], 1),
@@ -659,7 +680,8 @@ def day_result(weight=60, menus=None, ingredients=None, height=None, sex=None):
         'day_targets': {'energy': [round(dt['Elo']), round(dt['Ehi'])],
                         'protein': [round(dt['Plo'], 1), round(dt['Phi'], 1)],
                         'potassium': round(dt['Kmax']), 'phosphorus': round(dt['Pmax']),
-                        'sodium': round(dt['Namax'])},
+                        'sodium': round(dt['Namax']),
+                        'sodium_total_target': round(dt['Na_total_max'])},
         'day_passed': bool(day_ok),
     }
 

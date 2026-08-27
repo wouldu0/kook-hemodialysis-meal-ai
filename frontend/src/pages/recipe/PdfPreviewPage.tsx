@@ -10,11 +10,12 @@ import { currentUser, generateRecipe, saveEverywhere } from "../../services/api"
 import { labels, menuMap, parseLocalIngredient } from "../../utils/menu";
 import {
   adjustedNutrition,
+  displayTarget,
+  displayValue,
   fmt,
   fmt2,
   minTargetOf,
   nmeta,
-  targetOf,
   totalNutrition,
 } from "../../utils/nutrition";
 
@@ -206,9 +207,9 @@ export function PdfPreviewPage() {
           </thead>
           <tbody>
             {nmeta.map((n) => {
-              const t = targetOf(targets, n.key);
+              const t = displayTarget(targets, n.key);
               const lo = minTargetOf(targets, n.key);
-              const v = values[n.key];
+              const v = displayValue(values, n.key);
               const ok = v <= t && (lo === 0 || v >= lo);
               return (
                 <tr key={n.key}>

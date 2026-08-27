@@ -35,7 +35,7 @@ CORE_FN_SRC = _extract_function_source(CORE_SRC, 'day_targets_only')
 
 def test_route_calls_day_targets_only_with_profile_fields():
     assert 'core.day_targets_only(' in ROUTE_SRC
-    for arg in ('weight=req.weight', 'height=req.height', 'sex=req.sex'):
+    for arg in ('weight=req.weight', 'height=req.height', 'sex=req.sex', 'custom_targets=_ct(req)'):
         assert arg in ROUTE_SRC, f'/day_targets 라우트가 {arg} 전달을 빠뜨렸습니다.'
 
 
@@ -57,19 +57,20 @@ def test_day_targets_only_values_match_formula():
     for node in tree.body:
         if isinstance(node, ast.FunctionDef) and node.name in ('standard_weight', 'day_targets'):
             funcs[node.name] = ast.get_source_segment(LEVERS_SRC, node)
-    ns = {'SALT_MG': 393}
+    ns = {'SALT_MG': 393, 'NA_TOTAL_MEAL': 655}
     exec(funcs['standard_weight'], ns)
     exec(funcs['day_targets'], ns)
 
-    def day_targets_only(weight=60, height=None, sex=None):
+    def day_targets_only(weight=60, height=None, sex=None, custom_targets=None):
         if height is not None:
             weight = ns['standard_weight'](height, sex)
-        d = ns['day_targets'](weight)
+        d = ns['day_targets'](weight, custom_targets)
         return {'energy': [round(d['Elo']), round(d['Ehi'])],
                 'protein': [round(d['Plo'], 1), round(d['Phi'], 1)],
                 'potassium': round(d['Kmax']),
                 'phosphorus': round(d['Pmax']),
-                'sodium': round(d['Namax'])}
+                'sodium': round(d['Namax']),
+                'sodium_total_target': round(d['Na_total_max'])}
 
     out = day_targets_only(height=170, sex='남')
     assert out == {
@@ -78,9 +79,20 @@ def test_day_targets_only_values_match_formula():
         'potassium': 3000,
         'phosphorus': 1000,
         'sodium': 1179,
+        'sodium_total_target': 1965,
     }
 
     # height 없이 weight만 준 경우(비회원 체험 등) — standard_weight를 거치지 않고 weight를 그대로 쓴다.
     out_no_height = day_targets_only(weight=60)
     assert out_no_height['energy'] == [1800, 2100]
     assert out_no_height['sodium'] == 1179
+    assert out_no_height['sodium_total_target'] == 1965
+
+    # custom_targets로 칼륨·총나트륨만 override — 나머지는 자동 산출값 그대로, Namax(첨가염)는
+    # sodium override와 무관하게 고정.
+    out_custom = day_targets_only(height=170, sex='남',
+                                   custom_targets={'potassium': 2200, 'sodium': 1800})
+    assert out_custom['potassium'] == 2200
+    assert out_custom['sodium_total_target'] == 1800
+    assert out_custom['sodium'] == 1179          # 첨가염 기준은 그대로
+    assert out_custom['energy'] == out['energy']  # 안 건드린 항목은 자동 산출값 유지

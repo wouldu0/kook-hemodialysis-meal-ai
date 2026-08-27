@@ -127,6 +127,17 @@ def _ensure_birthdate_column(conn):
     _birthdate_ready = True
 
 
+_custom_targets_ready = False
+
+
+def _ensure_custom_targets_column(conn):
+    global _custom_targets_ready
+    if _custom_targets_ready:
+        return
+    conn.execute(text('ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS custom_targets jsonb'))
+    _custom_targets_ready = True
+
+
 def bearer(authorization: Optional[str] = Header(default=None)):
     if not authorization or not authorization.lower().startswith('bearer '):
         raise HTTPException(401, '로그인이 필요합니다.')
@@ -204,7 +215,8 @@ def logout(authorization: Optional[str] = Header(default=None)):
 def me(user=Depends(bearer)):
     with db() as conn:
         _ensure_birthdate_column(conn)
-        p = conn.execute(text('''select gender,age,height_cm,weight_kg,dialysis_type,birthdate
+        _ensure_custom_targets_column(conn)
+        p = conn.execute(text('''select gender,age,height_cm,weight_kg,dialysis_type,birthdate,custom_targets
                                  from user_profiles where user_id=:u'''),
                          {'u': user['id']}).mappings().first()
     profile = dict(p) if p else None
@@ -222,14 +234,19 @@ def update_profile(req: ProfileReq, user=Depends(bearer)):
         raise HTTPException(422, str(e))
     # 생년월일 원본도 보관한다 — 아이디/비밀번호 찾기의 본인 확인 근거로 쓰인다.
     birth = _parse_birthdate(req.birthdate) if req.birthdate else None
+    # custom_targets는 항상 전체를 다시 저장한다(coalesce 안 함) — 프론트가 항상 현재 값을
+    # 함께 보내므로(ProfileReq 주석 참고), '기본값으로 되돌리기'는 그냥 null을 보내면 된다.
+    ct = Jsonb(req.custom_targets.model_dump(exclude_none=True)) if req.custom_targets else None
     with db() as conn:
         _ensure_birthdate_column(conn)
-        conn.execute(text('''insert into user_profiles(user_id,gender,age,height_cm,weight_kg,dialysis_type,birthdate)
-        values(:u,:g,:a,:h,:w,:d,:b) on conflict(user_id) do update set gender=excluded.gender,age=excluded.age,
+        _ensure_custom_targets_column(conn)
+        conn.execute(text('''insert into user_profiles(user_id,gender,age,height_cm,weight_kg,dialysis_type,birthdate,custom_targets)
+        values(:u,:g,:a,:h,:w,:d,:b,:c) on conflict(user_id) do update set gender=excluded.gender,age=excluded.age,
         height_cm=excluded.height_cm,weight_kg=excluded.weight_kg,dialysis_type=excluded.dialysis_type,
-        birthdate=coalesce(excluded.birthdate,user_profiles.birthdate),updated_at=now()'''),
+        birthdate=coalesce(excluded.birthdate,user_profiles.birthdate),
+        custom_targets=excluded.custom_targets,updated_at=now()'''),
         {'u': user['id'], 'g': req.gender, 'a': age, 'h': req.height, 'w': req.weight,
-         'd': req.dialysis, 'b': birth})
+         'd': req.dialysis, 'b': birth, 'c': ct})
     return {'ok': True}
 
 
@@ -319,10 +336,16 @@ def menus_by_ingredient(q: str):
 
 
 # ────────────────────────── 식단 생성 (진짜 AI 엔진) ──────────────────────────
+def _ct(req) -> Optional[dict]:
+    """CustomTargets(있으면) → core 계산 함수들이 읽는 순수 dict. 없으면 None(=기존과 동일 동작)."""
+    return req.custom_targets.model_dump(exclude_none=True) if req.custom_targets else None
+
+
 @app.post('/generate')
 def generate(req: GenReq):
     """한 끼 생성. consumed(오늘 먹은 누적)를 주면 남은 예산으로 이 끼의 목표를 잡는다.
-    used_today(오늘 이미 나온 메뉴)를 주면 day_result와 동일하게 하루 중복을 피한다."""
+    used_today(오늘 이미 나온 메뉴)를 주면 day_result와 동일하게 하루 중복을 피한다.
+    custom_targets(있으면)로 의료진 안내값을 부분 override한다."""
     consumed = parse_consumed(req.consumed)
     used_today = set(req.used_today) if req.used_today else None
     return core.meal_result(menu=(req.menu or None),
@@ -330,7 +353,8 @@ def generate(req: GenReq):
                             weight=req.weight, height=req.height, sex=req.sex,
                             consumed=consumed,
                             meals_left=max(1, min(3, req.meals_left)),
-                            used_today=used_today)
+                            used_today=used_today,
+                            custom_targets=_ct(req))
 
 
 @app.post('/generate_day')
@@ -339,13 +363,15 @@ def generate_day(req: DayReq):
     def clean(lst):
         return [(x or None) for x in lst] if lst else None
     return core.day_result(weight=req.weight, height=req.height, sex=req.sex,
-                           menus=clean(req.menus), ingredients=clean(req.ingredients))
+                           menus=clean(req.menus), ingredients=clean(req.ingredients),
+                           custom_targets=_ct(req))
 
 
 @app.post('/day_targets')
 def day_targets(req: DayTargetsReq):
     """메뉴 생성 없이 하루 전체 영양 기준만 계산. 식사 기록 화면의 진행률 표시용."""
-    return core.day_targets_only(weight=req.weight, height=req.height, sex=req.sex)
+    return core.day_targets_only(weight=req.weight, height=req.height, sex=req.sex,
+                                 custom_targets=_ct(req))
 
 
 @app.post('/recipe', dependencies=[Depends(rate_limit('recipe', 20, 300))])

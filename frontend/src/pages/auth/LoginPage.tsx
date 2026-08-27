@@ -47,6 +47,7 @@ export function LoginPage() {
             height: p.height_cm != null ? String(p.height_cm) : "",
             weight: p.weight_kg != null ? String(p.weight_kg) : "",
             dialysis: p.dialysis_type || "혈액투석",
+            customTargets: p.custom_targets || undefined,
           });
         }
       } catch {

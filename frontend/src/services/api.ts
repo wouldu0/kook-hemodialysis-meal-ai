@@ -1,6 +1,6 @@
 // 백엔드 통신 + 로컬/서버 동기화 저장소. App.tsx의 화면 컴포넌트들은 이 모듈의
 // 함수만 통해서 서버와 이야기한다(직접 fetch를 새로 쓰지 않는다).
-import type { ApiResult, DayPlanResult, MealTime, SavedItem, SavedUser } from "../types";
+import type { ApiResult, CustomTargets, DayPlanResult, MealTime, SavedItem, SavedUser } from "../types";
 import { todayISO } from "../utils/date";
 
 export const storage = {
@@ -382,7 +382,10 @@ export type DayTargets = {
   protein: [number, number];
   potassium: number;
   phosphorus: number;
+  // 첨가염(Na_season) 상한 — 기존 필드, 화면 표시엔 안 쓴다.
   sodium: number;
+  // 총나트륨(Na 기준) 하루 목표 — 식사 기록 진행률이 실제로 비교하는 값(2026-08 나트륨 재설계).
+  sodium_total_target?: number;
 };
 
 export function fetchDayTargets(body: Record<string, unknown>): Promise<DayTargets> {
@@ -450,8 +453,15 @@ export function updateProfile(payload: {
   height: number;
   weight: number;
   dialysis: string;
+  // 항상 현재 값을 함께 보낸다 — 안 보내면(undefined) 서버가 기존 저장값을 그대로 지운다
+  // (schemas.ProfileReq 주석 참고). 지우고 싶을 땐 명시적으로 null을 보낸다.
+  customTargets?: CustomTargets | null;
 }) {
-  return apiFetch("/me/profile", { method: "PUT", body: JSON.stringify(payload) });
+  const { customTargets, ...rest } = payload;
+  return apiFetch("/me/profile", {
+    method: "PUT",
+    body: JSON.stringify({ ...rest, custom_targets: customTargets }),
+  });
 }
 
 export function getMe(): Promise<{ user: any; profile: any }> {
