@@ -4,6 +4,7 @@ import { useApp } from "../../hooks/useApp";
 import { useSpeech } from "../../hooks/useSpeech";
 import { generateRecipe } from "../../services/api";
 import { menuMap, parseLocalIngredient } from "../../utils/menu";
+import { speakOrdinal } from "../../utils/speech";
 import { displayValue, fmt, fmt2, nmeta } from "../../utils/nutrition";
 import { Button } from "../layout/Button";
 import { SpeakerIcon } from "../icons";
@@ -98,7 +99,7 @@ export function RecipeBody({
     steps ?? (m?.steps?.length ? toSteps(m.steps) : []);
   const recipeSpeech = [
     `${menuName} 조리 순서입니다.`,
-    ...displaySteps.map((s, i) => `${i + 1}번. ${s}`),
+    ...displaySteps.map((s, i) => `${speakOrdinal(i + 1)}. ${s}`),
   ].join(" ");
   // 서버 데이터도 로컬 데이터도 없는 메뉴(주소로 직접 들어온 경우 등)
   const noData =
@@ -190,7 +191,9 @@ export function RecipeBody({
                 className="tts-button"
                 onClick={() => {
                   setVoiceStep(0);
-                  speech.speak(`${menuName} 조리 순서입니다. 1번. ${displaySteps[0]}`);
+                  speech.speak(
+                    `${menuName} 조리 순서입니다. ${speakOrdinal(1)}. ${displaySteps[0]}`,
+                  );
                 }}
               >
                 <SpeakerIcon />
@@ -233,7 +236,7 @@ export function RecipeBody({
                     className="ask-no"
                     onClick={() =>
                       speech.speak(
-                        `${voiceStep + 1}번. ${displaySteps[voiceStep]}`,
+                        `${speakOrdinal(voiceStep + 1)}. ${displaySteps[voiceStep]}`,
                       )
                     }
                   >
@@ -245,7 +248,9 @@ export function RecipeBody({
                       onClick={() => {
                         const next = voiceStep + 1;
                         setVoiceStep(next);
-                        speech.speak(`${next + 1}번. ${displaySteps[next]}`);
+                        speech.speak(
+                          `${speakOrdinal(next + 1)}. ${displaySteps[next]}`,
+                        );
                       }}
                     >
                       다음 →
