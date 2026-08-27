@@ -207,7 +207,7 @@ export function NutritionTargetsPage() {
                 </small>
               )}
               {f.range ? (
-                <div className="segments" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                <div className="segments">
                   <div className="field">
                     <input
                       inputMode="decimal"
