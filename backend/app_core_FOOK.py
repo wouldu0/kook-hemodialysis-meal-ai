@@ -591,7 +591,11 @@ def meal_result(menu=None, ingredient=None, weight=60, consumed=None, meals_left
         'mode': 'menu' if menu else ('ingredient' if ingredient else 'random'),
         'anchor': anchor,
         'meal': final_menus,
-        'raw_menus': menus,        # 생성 직후(레버 재료교체 전) 슬롯별 메뉴명 — 하루 중복 체크용
+        'raw_menus': menus,        # 생성 직후(레버 재료교체 전) 슬롯별 메뉴명 — 하루 중복 체크용(원본 그대로, 표시명 정리 전)
+        # raw_menus에 표시명 정리(disp)만 입힌 것 — '식단을 생성했어요' 화면처럼 레버 재구성
+        # 전 메뉴를 사용자에게 보여줄 때 씀. dish_ingredients/dish_nutrition은 최종(meal) 기준으로만
+        # 있으므로 이 메뉴를 눌러도 그 후보의 개인화 영양표는 없을 수 있음(프론트가 그 경우도 처리).
+        'raw_menus_display': [disp(m) for m in menus],
 
         'nutrition': {'energy': round(after['E']), 'protein': round(after['protein'], 1),
                       'potassium': round(after['K']), 'phosphorus': round(after['P']),

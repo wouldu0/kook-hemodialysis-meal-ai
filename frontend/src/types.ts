@@ -90,6 +90,9 @@ export interface ApiResult {
   anchor?: string | null;
   meal?: string[];
   raw_menus?: string[];
+  // raw_menus에 표시명 정리(예: '돈까스소스'->'돈까스+소스')만 입힌 것 — '식단을 생성했어요'
+  // 화면처럼 레버 재구성 전 메뉴를 사용자에게 보여줄 때 이 값을 쓴다(2026-08).
+  raw_menus_display?: string[];
   nutrition?: NutritionBlock;
   // 레버로 재조정하기 전(원본 레시피) 영양값 — '재구성 전/후' 비교 화면용.
   nutrition_before?: NutritionBlock;

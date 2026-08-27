@@ -8,7 +8,15 @@ import { roleShort } from "../../utils/menu";
 
 export function MealResultPage() {
   const nav = useNavigate();
-  const { plan } = useApp();
+  const { plan, apiResult } = useApp();
+  // 이 화면은 "방금 생성된 그대로"의 식단을 보여준다 — 영양 판정(AnalysisPage)이 조정 전
+  // 수치(nutrition_before)를 쓰는 것과 같은 원칙. plan.menus는 레버 재구성이 끝난 최종
+  // 메뉴라 여기서 그대로 쓰면 재구성 안내(ComparisonPage)보다 먼저 바뀐 이름이 보이므로,
+  // 레버가 손대기 전 슬롯별 메뉴명(raw_menus_display)이 있으면 그걸 우선 쓴다.
+  const displayMenus =
+    apiResult?.raw_menus_display && apiResult.raw_menus_display.length > 0
+      ? apiResult.raw_menus_display
+      : plan.menus;
   return (
     <Shell
       header={false}
@@ -36,7 +44,7 @@ export function MealResultPage() {
         </span>
       </div>
       <div className="meal-list numbered">
-        {plan.menus.map((name, i) => (
+        {displayMenus.map((name, i) => (
           <MealListRow
             key={name}
             name={name}
