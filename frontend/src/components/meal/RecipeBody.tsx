@@ -34,9 +34,27 @@ export function toSteps(v: unknown): string[] {
 export function RecipeBody({
   menuName,
   showMakeMealButton = false,
+  snapshot,
+  snapshotLoading = false,
+  onStepsReady,
 }: {
   menuName: string;
   showMakeMealButton?: boolean;
+  // 찜한 메뉴(MenuDetailPage)처럼 "그 시점에 저장해둔" 재료·조리과정·영양을 전역 apiResult보다
+  // 우선 써야 할 때 넘긴다. 없으면(방금 생성한 식단 화면 등) 기존처럼 apiResult/정적 데이터를 쓴다.
+  snapshot?: {
+    ingredients?: [string, number][];
+    steps?: string[];
+    nutrition?: Record<string, number>;
+    recipeSource?: string;
+  };
+  // true면 snapshot을 아직 조회 중이라는 뜻(예: MenuDetailPage가 찜 목록을 불러오는 동안) —
+  // 이때는 snapshot이 아직 undefined라고 해서 "스냅샷 없음"으로 단정하면 안 되므로, 전역
+  // apiResult로 성급하게 조리법을 새로 생성하지 않고 snapshot이 확정될 때까지 기다린다.
+  snapshotLoading?: boolean;
+  // snapshot에 조리과정이 아직 없어서 이 컴포넌트가 새로 생성했을 때, 그 결과를 호출한 쪽(찜
+  // 저장소)에 되돌려준다 — 다음에 봐도 똑같은 내용이 뜨도록 한 번만 저장해두기 위함.
+  onStepsReady?: (steps: string[]) => void;
 }) {
   const nav = useNavigate();
   const { apiResult, setDishSteps, setSearchMode, setQuery } = useApp();
@@ -45,17 +63,18 @@ export function RecipeBody({
     setQuery(menuName);
     nav("/generating");
   };
-  // 서버가 이 끼를 생성하며 실제로 계산한 재료(dish_ingredients)를 최우선으로 쓴다.
+  // 우선순위: 찜 스냅샷 > 이번 세션에 실제로 계산한 재료(dish_ingredients) > 정적 폴백.
   // 재료 교체로 이름이 바뀐 메뉴는 recipe_source에 원래 이름이 있어 조리법은 원본 기준 조회.
   const serverIngredients: [string, number][] | undefined =
-    apiResult?.dish_ingredients?.[menuName];
+    snapshot?.ingredients || apiResult?.dish_ingredients?.[menuName];
   const recipeSourceName: string | undefined =
-    apiResult?.recipe_source?.[menuName];
+    snapshot?.recipeSource || apiResult?.recipe_source?.[menuName];
   const m = menuMap.get(menuName); // 서버 데이터가 없을 때 쓰는 로컬 폴백
   const ingredients: [string, number][] =
     serverIngredients || (m?.ingredients || []).map(parseLocalIngredient);
-  const nutrition = apiResult?.dish_nutrition?.[menuName] || m?.nutrition;
-  const isServerNutrition = !!apiResult?.dish_nutrition?.[menuName];
+  const nutrition =
+    snapshot?.nutrition || apiResult?.dish_nutrition?.[menuName] || m?.nutrition;
+  const isServerNutrition = !!(snapshot?.nutrition || apiResult?.dish_nutrition?.[menuName]);
 
   const [steps, setSteps] = useState<string[] | null>(null);
   const [loadingRecipe, setLoadingRecipe] = useState(false);
@@ -65,8 +84,17 @@ export function RecipeBody({
   const speech = useSpeech();
 
   useEffect(() => {
-    setSteps(null);
+    // 스냅샷을 아직 불러오는 중이면 아무것도 하지 않고 기다린다 — 여기서 apiResult로 성급하게
+    // 조리법을 생성해버리면, 스냅샷이 도착했을 때 그 결과를 버리고 또 한 번 새로 생성하게 된다.
+    if (snapshotLoading) return;
     setRecipeError("");
+    // 찜 스냅샷에 이미 그 시점의 조리과정이 있으면 그대로 쓴다 — 다시 생성(=새 LLM 응답)하지
+    // 않아야 나중에 봐도 항상 같은 내용이 뜬다.
+    if (snapshot?.steps && snapshot.steps.length) {
+      setSteps(snapshot.steps);
+      return;
+    }
+    setSteps(null);
     if (!serverIngredients || !serverIngredients.length) return;
     let live = true;
     setLoadingRecipe(true);
@@ -83,6 +111,9 @@ export function RecipeBody({
           setSteps(parsed);
           // PDF 미리보기가 이 메뉴를 다시 /recipe로 불러오지 않고 재사용하도록 캐싱.
           setDishSteps(menuName, parsed);
+          // 찜한 메뉴를 열어봤는데 스냅샷에 조리과정이 없어 방금 새로 생성한 경우, 호출한
+          // 쪽(MenuDetailPage)이 이걸 찜 기록에 채워 넣어 다음부터는 고정되게 한다.
+          onStepsReady?.(parsed);
         }
       })
       .catch(() => {
@@ -93,7 +124,7 @@ export function RecipeBody({
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [menuName]);
+  }, [menuName, snapshot, snapshotLoading]);
 
   const displaySteps: string[] =
     steps ?? (m?.steps?.length ? toSteps(m.steps) : []);

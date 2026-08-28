@@ -13,7 +13,7 @@ export function RecipeList({
   selected: string;
   onSelect: (n: string) => void;
 }) {
-  const { plan, apiResult } = useApp();
+  const { plan, apiResult, dishSteps } = useApp();
   // 메뉴 단위 찜(kind:"menu") 목록만 따로 들고 있는다 — 식단 콤보 찜(fook:favorites의
   // 기존 항목)과 저장 위치(같은 키)는 같지만 화면에서 다루는 대상은 다르다.
   const [menuFavs, setMenuFavs] = useState<SavedItem[]>([]);
@@ -36,6 +36,9 @@ export function RecipeList({
       return;
     }
     const nutrition = apiResult?.dish_nutrition?.[name] || menuMap.get(name)?.nutrition;
+    // 지금 이 식단 생성 결과에 이 메뉴의 실제 재료가 있으면 같이 스냅샷 저장한다. 조리과정은
+    // 세션 중 이미 펼쳐봐서 dishSteps에 캐시돼 있을 때만 같이 저장되고, 없으면 나중에 찜한
+    // 메뉴를 처음 열 때 한 번 생성해서 채워 넣는다(MenuDetailPage 참고).
     const item: SavedItem = {
       id: `menu-${Date.now()}`,
       title: name,
@@ -44,6 +47,9 @@ export function RecipeList({
       kind: "menu",
       menuName: name,
       nutrition,
+      recipeIngredients: apiResult?.dish_ingredients?.[name],
+      recipeSteps: dishSteps[name],
+      recipeSource: apiResult?.recipe_source?.[name],
     };
     setMenuFavs((prev) => [item, ...prev]);
     await saveEverywhere("fook:favorites", item);

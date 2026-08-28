@@ -71,7 +71,9 @@ function NutritionLine({
     <div className={className}>
       {nmeta.map((n) => (
         <span key={n.key}>
-          {n.icon} {fmt(values[n.key] ?? 0)}
+          {/* 나트륨은 displayValue()가 sodium_total(총나트륨)이 있으면 그걸 우선 쓴다 —
+              찜한 메뉴 배지도 화면 전체와 같은 총나트륨 기준으로 통일(2026-08). */}
+          {n.icon} {fmt(displayValue(values, n.key))}
           {n.unit}
         </span>
       ))}
@@ -135,12 +137,17 @@ function SavedCard({
   const intake = mode === "history" && isValidIntake(item.intake) ? item.intake : undefined;
   // 메뉴 단위 찜은 item.nutrition이 이미 NutrientKey 체계라 intakeToDisplay() 변환이 필요 없다.
   const menuNutrition = mode === "favorites" && item.kind === "menu" ? item.nutrition : undefined;
+  // 식사 기록은 title이 밥·국·반찬 중 국 하나(menus[1])라 국만 굵게 보였다 — 기록은 항상
+  // 한 끼 전체(콤보)이므로 밥·국·반찬을 전부 굵게 보여준다. subtitle도 원래 같은 내용
+  // (menus.join(" · "))이라 중복 표시를 피하려고 이때만 따로 안 보여준다.
+  const isHistoryCombo = mode === "history" && !!item.menus?.length;
+  const mainText = isHistoryCombo ? item.menus!.join(" · ") : item.title;
   return (
     <article>
       <div className="saved-thumb">{mode === "documents" ? "PDF" : "KOOK"}</div>
       <button className="saved-main" onClick={() => onOpen(item)}>
-        <b>{item.title}</b>
-        <span>{item.subtitle}</span>
+        <b>{mainText}</b>
+        {!isHistoryCombo && <span>{item.subtitle}</span>}
         {mode !== "favorites" && (
           <small>
             {showMealTime && item.mealTime ? `${item.mealTime} · ` : ""}

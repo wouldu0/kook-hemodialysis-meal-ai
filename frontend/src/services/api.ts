@@ -144,6 +144,11 @@ export async function saveEverywhere(key: string, item: SavedItem) {
           kind: item.kind,
           menuName: item.menuName,
           nutrition: item.nutrition,
+          // 메뉴 단위 찜(kind:"menu")의 재료·조리과정 스냅샷(2026-08). payload는 서버가
+          // 그대로 jsonb로 저장/반환하는 자유 형식이라 백엔드 스키마 변경은 필요 없다.
+          recipeIngredients: item.recipeIngredients,
+          recipeSteps: item.recipeSteps,
+          recipeSource: item.recipeSource,
         },
       }),
     });
@@ -181,6 +186,9 @@ export async function loadEverywhere(key: string): Promise<SavedItem[]> {
       kind: r.payload?.kind,
       menuName: r.payload?.menuName,
       nutrition: r.payload?.nutrition,
+      recipeIngredients: r.payload?.recipeIngredients,
+      recipeSteps: r.payload?.recipeSteps,
+      recipeSource: r.payload?.recipeSource,
     }));
     // 서버 저장이 실패했던 항목은 로컬에만 남아 있다. 서버 목록으로 덮어쓰면
     // 방금 저장한 게 사라져 보이므로, 서버에 없는 로컬 항목은 함께 보여준다.

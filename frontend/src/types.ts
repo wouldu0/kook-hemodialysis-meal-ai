@@ -72,6 +72,13 @@ export type SavedItem = {
   kind?: "meal" | "menu";
   menuName?: string;
   nutrition?: Record<NutrientKey, number>;
+  // 메뉴 단위 찜(kind:"menu")에서만 쓴다 — 찜한 시점(또는 그 뒤 처음 열어봤을 때)의 재료·
+  // 조리과정을 스냅샷으로 저장해, 나중에 다시 봐도 항상 같은 내용이 뜨게 한다(2026-08).
+  // 찜하는 순간엔 조리과정이 아직 없을 수 있어(그 메뉴를 펼쳐본 적 없으면) recipeSteps는
+  // 비어 있을 수 있고, 이땐 처음 열람할 때 한 번 생성해 이 자리에 채워 넣는다.
+  recipeIngredients?: [string, number][];
+  recipeSteps?: string[];
+  recipeSource?: string; // 재료 교체로 이름이 바뀐 메뉴의 원본명(조리법 조회용)
 };
 
 // backend/app_core_FOOK.py의 meal_result()가 실제로 내려주는 응답 형태.
