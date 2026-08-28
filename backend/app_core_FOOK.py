@@ -486,7 +486,11 @@ def make_meal(menu=None, ingredient=None, W=60, tries=48, temp=0.8, bounds=None,
     if na_w:
         warns.append(na_w)
     warn = ' '.join(warns)
-    return best, note + f' [{tries}회 완전통과 실패 → 최선 {best_score}/5]' + ('\n  ⚠ ' + warn if warn else ''), b, anchor, warn
+    # 시도 횟수·candidate score는 내부 디버그 정보라 사용자에게 보여줄 note에는 안 담는다
+    # (서버 로그에만 남긴다) — note는 항상 '생성 방식 안내'만, warn은 '영양 기준 미달' 안내만
+    # 담도록 성격을 분리한다(둘을 합쳐서 note에 중복으로 붙이지 않음, 2026-08).
+    print(f'  [make_meal] {tries}회 완전통과 실패 → 최선 후보 score={best_score}/5' + (f' warn={warn}' if warn else ''))
+    return best, note, b, anchor, warn
 
 
 def show(cand, note, b):

@@ -546,7 +546,7 @@ KOOK/
 │   ├── 📂 Exploiting-Food-Embeddings-.../       # 재료 대체 임베딩
 │   ├── schemas.py                               # 요청 스키마(Pydantic) — TF 모델 import 안 함
 │   ├── rate_limit.py                            # 인메모리 rate limiter(로그인·OpenAI 엔드포인트용)
-│   ├── 📂 tests/                                # pytest 282개 — TF 모델 로딩 없음(RAG 챗봇 테스트는 영양DB 엑셀만 로딩)
+│   ├── 📂 tests/                                # pytest 290개 — TF 모델 로딩 없음(RAG 챗봇 테스트는 영양DB 엑셀만 로딩)
 │   ├── 📂 scripts/smoke_generate_day.py         # 실제 모델 대상 수동 스모크 테스트(CI 미포함)
 │   ├── requirements-dev.txt                     # CI용 최소 의존성(pytest, fastapi, httpx 등)
 │   └── 식약청_영양성분10.4(수정).xlsx              # 영양성분 DB
@@ -591,7 +591,7 @@ KOOK/
 ├── 📂 docs/
 │   └── DEVLOG.md                                # 개발 변경 이력 (v13 등)
 │
-├── 📂 .github/workflows/ci.yml                  # 백엔드 pytest 282개 + 프론트 타입체크·빌드 (TF 모델 로딩 없음)
+├── 📂 .github/workflows/ci.yml                  # 백엔드 pytest 290개 + 프론트 타입체크·빌드 (TF 모델 로딩 없음)
 └── render.yaml                                  # Render 배포 설계도
 ```
 

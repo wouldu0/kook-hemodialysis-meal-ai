@@ -205,7 +205,10 @@ export function ComparisonPage() {
       )}
       {apiResult?.warning && (
         <div className="warning-box">
-          <b>⚠ 나트륨 안내</b>
+          {/* warning은 나트륨 전용이 아니라 열량·단백질·칼륨·인·나트륨 중 기준을 못 맞춘
+              항목의 범용 안내라 라벨도 그에 맞춘다(2026-08, 예전엔 "나트륨 안내"로 고정돼
+              단백질 미달 등 다른 영양소 문구가 떠도 나트륨 문제처럼 보였음). */}
+          <b>⚠ 영양 안내</b>
           <span>{apiResult.warning}</span>
         </div>
       )}

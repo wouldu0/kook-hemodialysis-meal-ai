@@ -92,7 +92,9 @@ export function DayPlanPage() {
               </div>
               {m.warning && (
                 <div className="warning-box">
-                  <b>⚠ 나트륨 안내</b>
+                  {/* ComparisonPage와 같은 이유로 라벨을 범용으로 바꿈(2026-08) — warning은
+                      나트륨 전용이 아니라 기준을 못 맞춘 영양소 전체를 안내하는 필드다. */}
+                  <b>⚠ 영양 안내</b>
                   <span>{m.warning}</span>
                 </div>
               )}
