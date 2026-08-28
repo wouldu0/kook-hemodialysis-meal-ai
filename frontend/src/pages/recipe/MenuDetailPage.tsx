@@ -67,6 +67,10 @@ export function MenuDetailPage() {
         showMakeMealButton
         snapshot={snapshot}
         snapshotLoading={fav === undefined}
+        // 이 화면은 항상 "찜한(또는 찜하려는) 그 메뉴 자체"만 보여준다 — 전역 apiResult는
+        // 세션에서 마지막으로 생성한 식단일 뿐이라, 우연히 이름이 같은 메뉴가 있어도 그
+        // 데이터가 섞여 들어가면 안 된다(재료 중량·recipeSource 등).
+        snapshotOnly
         onStepsReady={persistSteps}
       />
     </Shell>

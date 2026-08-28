@@ -36,6 +36,7 @@ export function RecipeBody({
   showMakeMealButton = false,
   snapshot,
   snapshotLoading = false,
+  snapshotOnly = false,
   onStepsReady,
 }: {
   menuName: string;
@@ -52,6 +53,11 @@ export function RecipeBody({
   // 이때는 snapshot이 아직 undefined라고 해서 "스냅샷 없음"으로 단정하면 안 되므로, 전역
   // apiResult로 성급하게 조리법을 새로 생성하지 않고 snapshot이 확정될 때까지 기다린다.
   snapshotLoading?: boolean;
+  // true면(MenuDetailPage 전용) snapshot에 없는 값을 전역 apiResult로 채우지 않는다 — apiResult는
+  // "지금 세션에서 마지막으로 생성한 식단"일 뿐이라, 그 시점이 이 찜과 무관할 수 있다(예: 재료
+  // 교체 전 이름이 우연히 같은 다른 메뉴가 최근에 생성됐다면 recipeSource가 엉뚱하게 섞여
+  // 들어갈 수 있음). snapshot에도 없으면 정적 폴백(menuMap)까지만 내려간다.
+  snapshotOnly?: boolean;
   // snapshot에 조리과정이 아직 없어서 이 컴포넌트가 새로 생성했을 때, 그 결과를 호출한 쪽(찜
   // 저장소)에 되돌려준다 — 다음에 봐도 똑같은 내용이 뜨도록 한 번만 저장해두기 위함.
   onStepsReady?: (steps: string[]) => void;
@@ -63,18 +69,21 @@ export function RecipeBody({
     setQuery(menuName);
     nav("/generating");
   };
-  // 우선순위: 찜 스냅샷 > 이번 세션에 실제로 계산한 재료(dish_ingredients) > 정적 폴백.
-  // 재료 교체로 이름이 바뀐 메뉴는 recipe_source에 원래 이름이 있어 조리법은 원본 기준 조회.
+  // 우선순위: 찜 스냅샷 > (snapshotOnly가 아니면) 이번 세션에 실제로 계산한 재료(dish_ingredients)
+  // > 정적 폴백. 재료 교체로 이름이 바뀐 메뉴는 recipe_source에 원래 이름이 있어 조리법은
+  // 원본 기준 조회 — 이것도 snapshotOnly면 전역 apiResult를 보지 않는다(위 snapshotOnly 설명 참고).
   const serverIngredients: [string, number][] | undefined =
-    snapshot?.ingredients || apiResult?.dish_ingredients?.[menuName];
+    snapshot?.ingredients ||
+    (snapshotOnly ? undefined : apiResult?.dish_ingredients?.[menuName]);
   const recipeSourceName: string | undefined =
-    snapshot?.recipeSource || apiResult?.recipe_source?.[menuName];
+    snapshot?.recipeSource ||
+    (snapshotOnly ? undefined : apiResult?.recipe_source?.[menuName]);
   const m = menuMap.get(menuName); // 서버 데이터가 없을 때 쓰는 로컬 폴백
   const ingredients: [string, number][] =
     serverIngredients || (m?.ingredients || []).map(parseLocalIngredient);
-  const nutrition =
-    snapshot?.nutrition || apiResult?.dish_nutrition?.[menuName] || m?.nutrition;
-  const isServerNutrition = !!(snapshot?.nutrition || apiResult?.dish_nutrition?.[menuName]);
+  const apiNutrition = snapshotOnly ? undefined : apiResult?.dish_nutrition?.[menuName];
+  const nutrition = snapshot?.nutrition || apiNutrition || m?.nutrition;
+  const isServerNutrition = !!(snapshot?.nutrition || apiNutrition);
 
   const [steps, setSteps] = useState<string[] | null>(null);
   const [loadingRecipe, setLoadingRecipe] = useState(false);
