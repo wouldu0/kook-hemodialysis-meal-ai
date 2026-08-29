@@ -100,7 +100,7 @@ export function HomePage() {
         안녕하세요, <b>{user?.name || "회원"}님!</b>
       </h1>
       <p className="sub">
-        건강한 한 끼, <b className="brand-word">KOOK</b>이 함께합니다.
+        건강한 한 끼, <b className="brand-word">푹</b>이 함께합니다.
       </p>
 
       <div className="quick-cards">
@@ -284,7 +284,7 @@ export function HomePage() {
             <p>
               먹고 싶은 음식을 고르지 않아도
               <br />
-              KOOK AI가 영양 기준에 맞는 한 끼를 만들어드려요.
+              푹 AI가 영양 기준에 맞는 한 끼를 만들어드려요.
             </p>
             <div className="ask-actions">
               <button

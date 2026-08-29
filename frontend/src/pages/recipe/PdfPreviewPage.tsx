@@ -96,7 +96,7 @@ export function PdfPreviewPage() {
         w,
         h,
       );
-      pdf.save(`KOOK_${plan.menus[1]}_맞춤한끼.pdf`);
+      pdf.save(`푹_${plan.menus[1]}_맞춤한끼.pdf`);
       if (currentUser())
         await saveEverywhere("fook:documents", {
           id: `pdf-${Date.now()}`,
@@ -132,7 +132,7 @@ export function PdfPreviewPage() {
         <div className="pdf-brand">
           <Logo />
           <div>
-            <b>KOOK 맞춤 한 끼 레시피</b>
+            <b>푹 맞춤 한 끼 레시피</b>
             <span>혈액투석 환자용 식단 참고 자료</span>
           </div>
         </div>

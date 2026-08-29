@@ -25,7 +25,7 @@ export function BackHeader({
         {/* 어느 화면에 있어도 브랜드가 보이도록 왼쪽 위에 로고를 둔다. 누르면 홈으로. */}
         <button
           className="header-brand"
-          aria-label="KOOK 홈으로"
+          aria-label="푹 홈으로"
           onClick={() => nav("/home")}
         >
           <Logo />

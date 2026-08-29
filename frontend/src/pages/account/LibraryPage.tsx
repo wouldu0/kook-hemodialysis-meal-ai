@@ -144,7 +144,7 @@ function SavedCard({
   const mainText = isHistoryCombo ? item.menus!.join(" · ") : item.title;
   return (
     <article>
-      <div className="saved-thumb">{mode === "documents" ? "PDF" : "KOOK"}</div>
+      <div className="saved-thumb">{mode === "documents" ? "PDF" : "푹"}</div>
       <button className="saved-main" onClick={() => onOpen(item)}>
         <b>{mainText}</b>
         {!isHistoryCombo && <span>{item.subtitle}</span>}
@@ -275,7 +275,7 @@ export function LibraryPage({
       footer={<BottomNav active={mode === "history" ? "history" : "account"} />}
     >
       <BackHeader title={meta[0]} />
-      <p className="eyebrow">MY KOOK</p>
+      <p className="eyebrow">MY 푹</p>
       <h1>{meta[0]}</h1>
       <p className="sub">{meta[1]}</p>
 

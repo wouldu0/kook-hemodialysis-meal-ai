@@ -5,7 +5,7 @@ export function Logo({ className = "" }: { className?: string }) {
     <img
       className={className}
       src="/assets/kook-logo.png"
-      alt="KOOK"
+      alt="푹"
       onError={(e) => {
         const img = e.currentTarget;
         if (!img.src.endsWith(".svg")) img.src = "/assets/kook-logo.svg";

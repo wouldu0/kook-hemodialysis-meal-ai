@@ -70,7 +70,7 @@ function Splash({ onStart }: { onStart: () => void }) {
           {!shotFailed ? (
             <img
               src="/assets/onboarding-home.png"
-              alt="오늘 뭐 해 먹지? 고민에 푹 빠질 땐 KOOK이 도와드립니다"
+              alt="오늘 뭐 해 먹지? 고민에 푹 빠질 땐 푹이 도와드립니다"
               onError={() => setShotFailed(true)}
             />
           ) : (
@@ -78,7 +78,7 @@ function Splash({ onStart }: { onStart: () => void }) {
               <Logo className="splash-logo" />
               <h1 className="splash-title">오늘 뭐 먹지?</h1>
               <p className="splash-sub">
-                고민에 <b>푹</b> 빠질 땐, <b>KOOK(쿡)</b>이 도와드립니다
+                고민에 <b>푹</b> 빠질 땐, <b>푹</b>이 도와드립니다
               </p>
               <div className="thought-bubble">
                 {[
@@ -174,7 +174,7 @@ function OnboardingVisual({ type }: { type: string }) {
   if (type === "nutrition")
     return (
       <div className="visual-card preview-card">
-        <NutrientIconRow caption="KOOK AI가 영양 기준 적합 여부를 판정합니다." />
+        <NutrientIconRow caption="푹 AI가 영양 기준 적합 여부를 판정합니다." />
         <Nutrients
           values={{
             energy: 620,
@@ -205,7 +205,7 @@ function OnboardingVisual({ type }: { type: string }) {
           </span>
           <b>레시피 재구성 중입니다</b>
           <small>
-            KOOK AI가 영양 밸런스를 맞추고 있어요...
+            푹 AI가 영양 밸런스를 맞추고 있어요...
             <br />
             잠시만 기다려주세요
           </small>

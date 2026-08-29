@@ -103,7 +103,7 @@ export function AdjustingPage() {
         </span>
         <b>레시피 재구성 중입니다</b>
         <small>
-          KOOK AI가 영양 밸런스를 맞추고 있어요...
+          푹 AI가 영양 밸런스를 맞추고 있어요...
           <br />
           잠시만 기다려주세요
         </small>

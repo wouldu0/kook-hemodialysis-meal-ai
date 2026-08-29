@@ -121,7 +121,7 @@ export function LoginPage() {
           <span />♥<span />
         </div>
         <p className="login-sub">
-          건강한 한 끼, <b>KOOK</b>이 함께합니다.
+          건강한 한 끼, <b>푹</b>이 함께합니다.
         </p>
       </div>
       <div className="form login-form">

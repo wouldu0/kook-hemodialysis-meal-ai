@@ -167,7 +167,7 @@ export function NutritionTargetsPage() {
       }
     >
       <BackHeader title="영양 기준 설정" />
-      <p className="eyebrow">MY KOOK</p>
+      <p className="eyebrow">MY 푹</p>
       <h1>
         의료진에게 안내받은
         <br />
