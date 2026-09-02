@@ -1,18 +1,26 @@
+import type { ComponentType } from "react";
 import type { NutrientKey, Plan } from "../types";
 import { menuMap } from "./menu";
+import {
+  FlameIcon,
+  PhosphorusIcon,
+  PotassiumIcon,
+  ProteinIcon,
+  SaltIcon,
+} from "../components/icons";
 
 export const nmeta: {
   key: NutrientKey;
   label: string;
   unit: string;
   target: number;
-  icon: string;
+  icon: ComponentType;
 }[] = [
-  { key: "energy", label: "열량", unit: "kcal", target: 550, icon: "🔥" },
-  { key: "protein", label: "단백질", unit: "g", target: 24, icon: "💪" },
-  { key: "phosphorus", label: "인", unit: "mg", target: 550, icon: "🦴" },
-  { key: "potassium", label: "칼륨", unit: "mg", target: 1200, icon: "🌿" },
-  { key: "sodium", label: "나트륨", unit: "mg", target: 400, icon: "🧂" },
+  { key: "energy", label: "열량", unit: "kcal", target: 550, icon: FlameIcon },
+  { key: "protein", label: "단백질", unit: "g", target: 24, icon: ProteinIcon },
+  { key: "phosphorus", label: "인", unit: "mg", target: 550, icon: PhosphorusIcon },
+  { key: "potassium", label: "칼륨", unit: "mg", target: 1200, icon: PotassiumIcon },
+  { key: "sodium", label: "나트륨", unit: "mg", target: 400, icon: SaltIcon },
 ];
 
 // meal_records에 저장된 intake({E,protein,K,P,Na,Na_season})를 nmeta/fmt와 같은

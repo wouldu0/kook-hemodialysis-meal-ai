@@ -406,3 +406,180 @@
 .header-brand:focus-visible { outline: 2px solid var(--gd); outline-offset: 3px; border-radius: 6px; }
 .header-lead { gap: var(--sp-xs); }
 .header-lead-title { margin-left: var(--sp-xs); }
+
+/* ============================================================================
+   v24 — UX/UI 리디자인: 통합 디자인 토큰 + 가독성 · 위계 · 상태 강조
+   ----------------------------------------------------------------------------
+   이 파일(fluid.css)이 styles.css → mockup.css → fluid.css 순서로 가장 마지막에
+   로드되므로, 여기서 :root 값을 다시 선언하면 이전 레이어의 색상을 전부 안전하게
+   덮어쓴다 — 기존 규칙을 지우거나 페이지마다 색을 따로 고치지 않고, 색상 정의를
+   한 곳으로 모으기 위해 이 방식을 썼다(이 코드베이스가 지금까지 v12~v23을 쌓아온
+   방식과 동일한 additive-override 컨벤션).
+   따뜻한 톤(warm white)·FOOK green 브랜드는 유지하되:
+     · 본문/보조 텍스트 대비를 올리고(너무 흐린 회색 제거)
+     · 선택됨/적정/조정됨/완료 같은 상태를 배경색 하나에만 기대지 않고
+       테두리·굵기로도 구분하고
+     · 비활성 버튼을 흐림 대신 명확한 회색 상태로 바꾼다.
+   ========================================================================== */
+:root {
+  --paper: #faf8f2;
+  --cream: #faf8f2;
+  --card: #fff;
+  --ink: #1f2a22;
+  /* 예전 값(#6c766e/#616d66)은 흰 배경에서 대비가 낮아 "흐리멍텅하다"는 지적을
+     받았던 부분 — 고령 사용자도 편하게 읽도록 확실히 진하게 잡았다. */
+  --muted: #4c564f;
+  --g: #4f7a41;
+  --gd: #234a29;
+  --gs: #e6f1e0;
+  --line: #ddd7c9;
+  --over: #c4362a;
+  --overbg: #fdeceb;
+  --under: #2a6ba8;
+  --underbg: #f3f8fd;
+  --warn: #a8691f;
+  --red: #c4362a;
+  /* 선택/포커스 표시, 비활성 버튼에 쓰는 새 토큰 */
+  --focus: #234a29;
+  --disabled-bg: #dfe2da;
+  --disabled-fg: #838d86;
+}
+body { background: var(--paper); }
+.phone { background: var(--paper); }
+
+/* 본문 최소 글자 크기를 한 단계 올린다 — 320px 폰에서도 보조 정보가 11px대로
+   내려가지 않게 하한을 높였다(고령층 가독성). */
+.phone {
+  --fs-xs: clamp(12.5px, 3cqi, 14px);
+  --fs-sm: clamp(14px, 3.5cqi, 16px);
+}
+
+/* ── 키보드/스크린리더 포커스 표시 (색만으로 상태를 구분하지 않기) ── */
+button:focus-visible, input:focus-visible, a:focus-visible, [tabindex]:focus-visible {
+  outline: 2.5px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* ── 보조 텍스트 대비 재확인: 특정 셀렉터에 직접 박아둔 옅은 회색을 토큰으로 통일 ── */
+.ba-from, .day-progress-label, .day-progress-value small { color: var(--muted); }
+.loading-list { color: var(--muted); }
+
+/* ── 버튼: CTA는 항상 가장 강하게, 비활성은 흐림이 아니라 "명확한 비활성"으로 ── */
+.btn:disabled {
+  opacity: 1;
+  background: var(--disabled-bg);
+  color: var(--disabled-fg);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.btn.btn-secondary { font-weight: 800; border-width: 1.5px; }
+.btn.btn-secondary:disabled { background: #fff; border-color: var(--line); color: var(--disabled-fg); }
+
+/* ── 카드형 "선택됨" 상태: 연녹 배경만이 아니라 두꺼운 테두리 + 굵은 글자로 구분 ── */
+.dialysis-card.selected,
+.quick-card.active,
+.pick-row.active,
+.search-result.active, .search-results button.active,
+.recipe-menu-row.active {
+  border-width: 2px;
+  border-color: var(--gd);
+  font-weight: 800;
+}
+.pick-row.active b, .search-results button.active b { color: var(--gd); }
+
+/* ── 상태 배지: 배경색만이 아니라 굵기 + 테두리로 한 번 더 구분 ── */
+.nutri-badge, .gauge-badge, .tag-adjust, .tag-keep, .adjust-badge {
+  font-weight: 900;
+  border: 1.5px solid transparent;
+}
+.tag-adjust, .adjust-badge { border-color: #f0b6ac; }
+.tag-keep { border-color: #bcd6b0; }
+.nutri-badge.ok { border-color: #1c3d21; }
+.nutri-badge.over { border-color: #8f261d; }
+.nutri-badge.under { border-color: #1c4d76; }
+
+/* ── 영양소 아이콘: 이모지 대신 SVG로 바뀐 자리 크기 잡기 (currentColor로 색 상속) ── */
+.nutri-icon { color: var(--gd); display: flex; align-items: center; justify-content: center; }
+.nutri-icon svg { width: clamp(20px, 6.8cqi, 26px); height: clamp(20px, 6.8cqi, 26px); display: block; }
+.nutrient-icons span { color: var(--gd); display: flex; align-items: center; justify-content: center; }
+.nutrient-icons span svg { width: clamp(19px, 6cqi, 24px); height: clamp(19px, 6cqi, 24px); display: block; }
+.dish-nutri > div > span { color: var(--gd); display: flex; align-items: center; justify-content: center; }
+.dish-nutri > div > span svg { width: clamp(17px, 5.4cqi, 21px); height: clamp(17px, 5.4cqi, 21px); display: block; }
+.day-progress-label svg, .ba-item-name svg, .intake-line svg {
+  width: 13px; height: 13px; display: inline-block; vertical-align: -2px; margin-right: 1px;
+}
+
+/* ============================================================================
+   홈: "음식 검색"을 대표 행동으로, "재료 검색 / 랜덤 추천"은 보조로 낮춘다.
+   기능·핸들러는 그대로 두고(3개 버튼 모두 그대로 동작) 레이아웃 비중만 바꾼다.
+   ========================================================================== */
+.quick-cards { grid-template-columns: 1fr 1fr; }
+.quick-card:first-child {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-md);
+  text-align: left;
+  padding: var(--sp-lg) var(--sp-md);
+  border: 2px solid var(--gd);
+  background: var(--gs);
+}
+.quick-card:first-child .quick-icon {
+  width: clamp(34px, 11cqi, 44px); height: clamp(34px, 11cqi, 44px);
+  flex: 0 0 auto; color: var(--gd);
+}
+.quick-card:first-child b { font-size: var(--fs-lg); color: var(--gd); }
+.quick-card:first-child small { font-size: var(--fs-xs); }
+.quick-card:nth-child(2), .quick-card:nth-child(3) {
+  padding: var(--sp-sm) var(--sp-xs);
+}
+.quick-card:nth-child(2) .quick-icon, .quick-card:nth-child(3) .quick-icon {
+  width: clamp(22px, 7cqi, 28px); height: clamp(22px, 7cqi, 28px); color: var(--muted);
+}
+.quick-card:nth-child(2) b, .quick-card:nth-child(3) b { font-size: var(--fs-sm); font-weight: 700; }
+.quick-card:nth-child(2).active .quick-icon, .quick-card:nth-child(3).active .quick-icon { color: var(--gd); }
+
+/* ============================================================================
+   식사 기록(하루 진행률): 영양소명 → 지금 먹은 양(가장 크게) → 기준량(보조) →
+   막대 순으로 위계를 다시 잡는다. JSX도 이 순서로 마크업을 나눴다(LibraryPage.tsx).
+   ========================================================================== */
+.day-progress-row { display: block; padding: var(--sp-sm) 0; border-bottom: 1px solid var(--line); }
+.day-progress-row:last-child { border-bottom: 0; }
+.day-progress-top { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-sm); }
+.day-progress-label { font-size: var(--fs-sm); font-weight: 700; color: var(--ink); }
+.day-progress-pct { font-size: var(--fs-xs); font-weight: 800; color: var(--muted); }
+.day-progress-row.over .day-progress-pct { color: var(--over); }
+.day-progress-row.under .day-progress-pct { color: var(--under); }
+.day-progress-value { margin: 3px 0 6px; display: flex; align-items: baseline; gap: 5px; }
+.day-progress-value strong { font-size: var(--fs-xl); font-weight: 900; color: var(--ink); font-variant-numeric: tabular-nums; }
+.day-progress-row.over .day-progress-value strong { color: var(--over); }
+.day-progress-row.under .day-progress-value strong { color: var(--under); }
+.day-progress-value small { font-size: var(--fs-xs); }
+.day-progress-track { height: 9px; }
+.day-progress-row.over .day-progress-fill { background: var(--over); }
+.day-progress-row.under .day-progress-fill { background: var(--under); }
+
+/* ============================================================================
+   레시피 재구성 완료: "간장 3.00g → 0.93g"에서 최종 사용량(0.93g)이 가장 먼저
+   눈에 들어오도록. 변경 전 값은 더 작고 흐리게, 변경 후 값은 진하고 크게.
+   ========================================================================== */
+.pc-before { font-size: var(--fs-xs); color: var(--muted); text-decoration: line-through; }
+.pc-after { font-size: var(--fs-sm); font-weight: 800; border: 1px solid #bcd6b0; }
+.permenu-changes li { align-items: center; }
+/* 최종 영양소 전/후 비교: '전' 값도 읽을 수 있는 대비로 */
+.ba-from { font-weight: 700; }
+
+/* ============================================================================
+   레시피 상세: 재료의 '양'과 단계 번호를 조리 중에도 빠르게 훑을 수 있도록.
+   ========================================================================== */
+.kv-row b { font-weight: 900; color: var(--gd); font-size: var(--fs-md); }
+.steps.table-steps li > span {
+  background: var(--gd); color: #fff; font-weight: 900; font-size: var(--fs-md);
+}
+
+/* ============================================================================
+   접근성: 터치 영역이 좁아질 수 있는 지점 보정
+   ========================================================================== */
+.delete-mini, .menu-fav-btn, .voice-close { min-width: 40px; min-height: 40px; }
+.calendar-cell { min-height: 36px; }

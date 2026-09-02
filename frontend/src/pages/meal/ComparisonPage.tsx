@@ -233,7 +233,7 @@ export function ComparisonPage() {
             return (
               <div className="ba-item" key={n.key}>
                 <span className="ba-item-name">
-                  {n.icon} {n.label}
+                  <n.icon /> {n.label}
                 </span>
                 {/* 증감 뱃지는 화살표 안에 쌓지 않고 아래 행으로 뺀다.
                     그래야 전/후 숫자가 화살표와 같은 줄에 정렬된다. */}

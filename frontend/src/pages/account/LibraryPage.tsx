@@ -73,7 +73,7 @@ function NutritionLine({
         <span key={n.key}>
           {/* 나트륨은 displayValue()가 sodium_total(총나트륨)이 있으면 그걸 우선 쓴다 —
               찜한 메뉴 배지도 화면 전체와 같은 총나트륨 기준으로 통일(2026-08). */}
-          {n.icon} {fmt(displayValue(values, n.key))}
+          <n.icon /> {fmt(displayValue(values, n.key))}
           {n.unit}
         </span>
       ))}
@@ -104,16 +104,24 @@ function DayProgress({
         const status = statusOf(v, lo, hi);
         return (
           <div className={`day-progress-row ${STATUS_CLASS[status]}`} key={n.key}>
-            <span className="day-progress-label">
-              {n.icon} {n.label}
-            </span>
+            <div className="day-progress-top">
+              <span className="day-progress-label">
+                <n.icon /> {n.label}
+              </span>
+              <span className="day-progress-pct">{rawPct}%</span>
+            </div>
+            {/* 무엇을 먼저 읽어야 하는지: 영양소명(위) → 지금 먹은 양(가장 크게) →
+                기준량(보조, 작게) → 막대(보조 시각화) 순으로 위계를 잡았다. */}
+            <div className="day-progress-value">
+              <strong>{fmt(v)}</strong>
+              <small>
+                /{fmt(hi)}
+                {n.unit} 기준
+              </small>
+            </div>
             <div className="day-progress-track">
               <div className="day-progress-fill" style={{ width: `${barPct}%` }} />
             </div>
-            <span className="day-progress-value">
-              {fmt(v)}/{fmt(hi)}
-              {n.unit} · {rawPct}%
-            </span>
           </div>
         );
       })}

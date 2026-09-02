@@ -34,7 +34,9 @@ export function Nutrients({
         const cls = isFallback ? "demo" : STATUS_CLASS[status];
         return (
           <div className={`nutri-card ${cls}`} key={n.key}>
-            <span className="nutri-icon">{n.icon}</span>
+            <span className="nutri-icon">
+              <n.icon />
+            </span>
             <span className="nutri-body">
               <b className="nutri-name">{n.label}</b>
               <span className="nutri-value">

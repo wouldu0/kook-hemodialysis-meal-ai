@@ -206,7 +206,9 @@ export function RecipeBody({
           <div className="dish-nutri">
             {nmeta.map((n) => (
               <div key={n.key}>
-                <span>{n.icon}</span>
+                <span>
+                  <n.icon />
+                </span>
                 <small>{n.label}</small>
                 <b>
                   {fmt(displayValue(nutrition, n.key))}

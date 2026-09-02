@@ -115,3 +115,51 @@ export const ChartIcon = () =>
       <path d="M8 16v-4M12 16V8M16 16v-2.5" />
     </>,
   );
+
+// ── 영양소 아이콘 (열량·단백질·인·칼륨·나트륨) ──
+// 기존에 🔥💪🦴🌿🧂 이모지로 쓰던 자리를 대체한다. 다른 아이콘과 같은 선화 스타일
+// (currentColor 상속)이라 어떤 배경·다크모드에도 이모지처럼 OS마다 다르게 보이지 않는다.
+// 아이콘만으로 의미를 판단하게 하지 않도록, 쓰는 곳에서는 항상 텍스트 라벨(n.label)을
+// 같이 보여준다 — 아이콘은 보조 시각 신호일 뿐이다.
+export const FlameIcon = () =>
+  svg(
+    <path
+      d="M12 2.5c2.2 3 .3 4.4.9 7 .5-1 .6-1.8.6-2.6 1.7 1.6 2.5 3.4 2.5 5.1a5 5 0 1 1-10 0c0-1.8.9-3 1.7-4.1.2 1 .7 1.6 1.3 1.9-.6-2.7.2-4.8 3-7.3Z"
+      fill="currentColor"
+      stroke="none"
+    />,
+  );
+export const ProteinIcon = () =>
+  svg(
+    <>
+      <path d="M4 9v6M2.3 10.6v2.8M7 6.8v10.4M17 6.8v10.4M21.7 10.6v2.8M20 9v6" />
+      <path d="M7 12h10" />
+    </>,
+  );
+export const PhosphorusIcon = () =>
+  svg(
+    <>
+      <circle cx="12" cy="12" r="2.1" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="4.3" r="1.6" />
+      <circle cx="19" cy="16.3" r="1.6" />
+      <circle cx="5" cy="16.3" r="1.6" />
+      <path d="M12 6.4v3.6M17.4 15.2 13.8 13M10.2 13 6.6 15.2" />
+    </>,
+  );
+export const PotassiumIcon = () =>
+  svg(
+    <>
+      <path d="M17 3a14 14 0 0 0-14 14v4h4A14 14 0 0 0 21 7V3h-4Z" />
+      <path d="M7 17c3-6 8-9 12-12" />
+    </>,
+  );
+export const SaltIcon = () =>
+  svg(
+    <>
+      <path d="M9.3 3h5.4l1.6 3.6c.3.5.5 1 .5 1.6V19a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V8.2c0-.6.2-1.1.5-1.6L9.3 3Z" />
+      <circle cx="10.3" cy="12.2" r=".6" fill="currentColor" stroke="none" />
+      <circle cx="13.7" cy="12.2" r=".6" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="15.4" r=".6" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="9.6" r=".6" fill="currentColor" stroke="none" />
+    </>,
+  );

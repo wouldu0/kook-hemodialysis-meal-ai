@@ -6,7 +6,9 @@ export function NutrientIconRow({ caption }: { caption?: string }) {
       <div className="nutrient-icons">
         {nmeta.map((n) => (
           <div key={n.key}>
-            <span>{n.icon}</span>
+            <span>
+              <n.icon />
+            </span>
             <small>{n.label}</small>
           </div>
         ))}
